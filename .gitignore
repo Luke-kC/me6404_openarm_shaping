@@ -12,3 +12,5 @@ wheels/
 
 # MuJoCo typings
 typings/
+
+repomix-output.xml

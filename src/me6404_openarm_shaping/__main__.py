@@ -9,10 +9,12 @@ from me6404_openarm_shaping.robot_model import (
     MODEL_PATH,
     MODEL_REVISION,
     eval_gravity_torques,
-    gravity_torques_from_potential_energy,
+    gravitational_stiffness,
     load_model,
     mass_matrix,
+    modal_report,
     resolve_joint_indices,
+    state_matrix,
 )
 
 
@@ -30,11 +32,18 @@ def main() -> None:
 
     try:
         model = load_model()
+
         position_indices, velocity_indices = resolve_joint_indices(model)
-        matrix = mass_matrix(model, args.q)
-        np.linalg.cholesky(matrix)
+
+        mass_inertia_matrix = mass_matrix(model, args.q)
+
+        np.linalg.cholesky(mass_inertia_matrix)
+
         gravity_torques = eval_gravity_torques(model, args.q)
-        gravity_torques_from_pot = gravity_torques_from_potential_energy(model, args.q)
+
+        grav_stiffness_matrix = gravitational_stiffness(model, args.q)
+
+        A = state_matrix(model, args.q)
 
     except (ValueError, OSError, np.linalg.LinAlgError) as error:
         parser.error(str(error))
@@ -48,15 +57,30 @@ def main() -> None:
     print("Nominal: arms at qpos0 (zero rad); all four fingers at 0.022 m.")
 
     print("\n----------MASS MATRIX----------")
-    print(f"Mass matrix shape: {matrix.shape}; units: kg m^2")
-    print(np.array2string(matrix, precision=10))
-    print(f"Symmetry error (max absolute): {np.max(np.abs(matrix - matrix.T)):.10e}")
+    print(f"Mass matrix shape: {mass_inertia_matrix.shape}; units: kg m^2")
+    print(np.array2string(mass_inertia_matrix, precision=10))
+    print(
+        f"Symmetry error (max absolute): {np.max(np.abs(mass_inertia_matrix - mass_inertia_matrix.T)):.10e}"
+    )
     print("Positive definite: Cholesky succeeded")
-    print(f"Minimum eigenvalue: {np.linalg.eigvalsh(matrix)[0]:.10e}")
+    print(f"Minimum eigenvalue: {np.linalg.eigvalsh(mass_inertia_matrix)[0]:.10e}")
 
     print("\n----------GRAVITY TORQUES----------")
     print("Gravity torques [N*m]:", gravity_torques)
-    print("Gravity torques from potential [N*m]:", gravity_torques_from_pot)
+
+    print("\n----------GRAVITATIONAL STIFFNESS MATRIX----------")
+    print(f"Shape: {grav_stiffness_matrix.shape}; units: N*m/rad")
+    print(np.array2string(grav_stiffness_matrix, precision=10))
+    print(
+        f"Symmetry error (max absolute): {np.max(np.abs(grav_stiffness_matrix - grav_stiffness_matrix.T)):.10e}"
+    )
+
+    print("\n----------STATE MATRIX----------")
+    print(f"Shape: {A.shape}")
+    print(np.array2string(A, precision=10))
+
+    print("\n----------MODAL ANALYSIS----------")
+    modal_report(A)
 
 
 if __name__ == "__main__":

@@ -45,7 +45,7 @@ def resolve_joint_indices(
     )
 
 
-def _nominal_configuration(model: mujoco.MjModel) -> NDArray[np.float64]:
+def nominal_configuration(model: mujoco.MjModel) -> NDArray[np.float64]:
 
     nominal = np.array(model.qpos0, dtype=np.float64, copy=True)
 
@@ -61,11 +61,15 @@ def _nominal_configuration(model: mujoco.MjModel) -> NDArray[np.float64]:
 
 
 def mass_matrix(model: mujoco.MjModel, q: ArrayLike) -> NDArray[np.float64]:
+    """
+    Calculates the mass inertia matrix, M(q), at joint configuration q.
+    For one 7-DoF OpenArm, this result is 7x7
+    """
     position_indices, velocity_indices = resolve_joint_indices(model)
 
     data = mujoco.MjData(model)
 
-    data.qpos[:] = _nominal_configuration(model)
+    data.qpos[:] = nominal_configuration(model)
     data.qpos[position_indices] = q
 
     mujoco.mj_forward(model, data)
@@ -77,12 +81,16 @@ def mass_matrix(model: mujoco.MjModel, q: ArrayLike) -> NDArray[np.float64]:
 
 
 def eval_gravity_torques(model: mujoco.MjModel, q: ArrayLike):
+    """
+    Calculates the constant gravity torques, g(q), at joint configuration q.
+    For one 7-DoF OpenArm, this result is 7x1
+    """
 
     position_indices, velocity_indices = resolve_joint_indices(model)
 
     data = mujoco.MjData(model)
 
-    data.qpos[:] = _nominal_configuration(model)
+    data.qpos[:] = nominal_configuration(model)
     data.qpos[position_indices] = q
 
     data.qvel[: model.nv] = 0.0
@@ -95,38 +103,109 @@ def eval_gravity_torques(model: mujoco.MjModel, q: ArrayLike):
     return full_gravity_torques[velocity_indices]
 
 
-def gravity_torques_from_potential_energy(model: mujoco.MjModel, q: ArrayLike):
+def gravitational_stiffness(
+    model: mujoco.MjModel, q: ArrayLike, epsilon: float = 0.001
+):
+    """
+    Calculates the gravitational stiffness matrix, Kg(q), at joint configuraion q.
+    Kg(q) = dg(q)/dq
+    For one 7-DoF OpenArm, this result is 7x7
+    epsilon is the central-difference step in radians.
+    """
     position_indices, velocity_indices = resolve_joint_indices(model)
 
-    epsilon = 0.01
+    n = len(position_indices)
+    Kg = np.zeros((n, n))
 
-    data = mujoco.MjData(model)
+    for i in range(n):
+        q_plus = np.array(q, dtype=np.float64)
+        q_minus = np.array(q, dtype=np.float64)
 
-    data.qvel[: model.nv] = 0.0
-    data.qacc[: model.nv] = 0.0
+        q_plus[i] += epsilon
+        q_minus[i] -= epsilon
 
-    data.qpos[:] = _nominal_configuration(model)
+        g_plus = np.asarray(eval_gravity_torques(model, q_plus))
+        g_minus = np.asarray(eval_gravity_torques(model, q_minus))
 
-    dV_dq = []
+        Kg[:, i] = (g_plus - g_minus) / (2 * epsilon)
 
-    model.opt.enableflags |= mujoco.mjtEnableBit.mjENBL_ENERGY
+    return Kg
 
-    for i in position_indices:
-        data.qpos[position_indices] = q
-        data.qpos[i] += epsilon
 
-        mujoco.mj_forward(model, data)
+def state_matrix(
+    model: mujoco.MjModel,
+    q: ArrayLike,
+):
+    position_indices, velocity_indices = resolve_joint_indices(model)
 
-        V2 = data.energy[0]
+    n = len(position_indices)
 
-        data.qpos[position_indices] = q
-        data.qpos[i] -= epsilon
-        mujoco.mj_forward(model, data)
+    A1 = np.zeros((n, n))
+    A2 = np.identity(n)
 
-        V1 = data.energy[0]
+    M = mass_matrix(model, q)
 
-        dV_dqi = (V2 - V1) / (2 * epsilon)
+    Kp = [70, 70, 70, 60, 10, 10, 10]
+    Kg = gravitational_stiffness(model, q)
 
-        dV_dq.append(dV_dqi)
+    Keff = np.diag(Kp) + Kg
 
-    return dV_dq
+    motor_Kd = [2.75, 2.5, 2.00, 2.00, 0.70, 0.60, 0.50]
+    passive_damping = 0.4
+
+    Deff = np.diag(motor_Kd) + passive_damping * np.identity(n)
+
+    A3 = -np.linalg.solve(M, Keff)
+    A4 = -np.linalg.solve(M, Deff)
+
+    A = np.block([[A1, A2], [A3, A4]])
+
+    return A
+
+
+def modal_report(A: NDArray[np.float64], tol: float = 1e-10):
+
+    eigenvalues, eigenvectors = np.linalg.eig(A)
+
+    if bool(np.all(np.real(eigenvalues) < 0.0)):
+        print("All eigenvalues have negative real part")
+    else:
+        print("One or more eigenvalues have >= 0.0 real part")
+
+    complex_count = np.sum(np.abs(np.imag(eigenvalues)) > tol)
+    complex_count = int(complex_count // 2)
+
+    real_count = len(eigenvalues) - 2 * complex_count
+
+    print("Number of complex-conjugate pairs: ", complex_count)
+    print("Number of purely real eigenvalues: ", real_count)
+
+    mode = 1
+    for i, lam in enumerate(eigenvalues):
+        if np.imag(lam) > tol:
+            sigma = np.real(lam)
+            omega_d = np.imag(lam)
+            omega_n = np.abs(lam)
+            zeta = -sigma / omega_n
+            damped_freq_hz = omega_d / (2 * np.pi)
+            natural_freq_hz = omega_n / (2 * np.pi)
+            eigenvector = eigenvectors[:, i]
+
+            joint_space_mode_shape = eigenvector[:7]
+
+            # Normalize displacement magnitudes separately from velocity entries
+            relative_amplitudes = np.abs(joint_space_mode_shape)
+            relative_amplitudes /= np.max(relative_amplitudes)
+
+            print(f"Mode {mode}:")
+            print(f"    Eigenvalue:               {lam:.2f}")
+            print(f"    Damped Frequency (Hz):    {damped_freq_hz:.3f} Hz")
+            print(f"    Natural Frequency (Hz):   {natural_freq_hz:.3f} Hz")
+            print(f"    Damping Ratio:            {zeta:.3f}")
+            print("    Relative joint amplitudes (largest = 1):")
+            for name, amplitude in zip(
+                LEFT_ARM_JOINT_NAMES, relative_amplitudes, strict=True
+            ):
+                print(f"        {name}: {amplitude:.3f}")
+
+            mode += 1

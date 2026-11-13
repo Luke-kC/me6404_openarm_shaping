@@ -1,7 +1,7 @@
-# ME 6404 Final Project
+# Model-Based Vibration Suppression for a 7-DoF OpenArm Manipulator
 
-**Model-Based Vibration Suppression for a 7-DoF OpenArm Manipulator**  
-Georgia Tech ME 6404 · Fall 2026
+**ME 6404 Final Project**  
+Georgia Tech · Fall 2026
 
 ## Objective
 

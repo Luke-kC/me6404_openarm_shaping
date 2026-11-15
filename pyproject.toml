@@ -7,7 +7,11 @@ authors = [
     { name = "Luke", email = "43226681+Luke-kC@users.noreply.github.com" },
 ]
 requires-python = ">=3.12"
-dependencies = ["mujoco>=4.0.1", "numpy>=2.5.4"]
+dependencies = [
+    "matplotlib>=3.11.2",
+    "mujoco>=4.0.1",
+    "numpy>=2.5.4",
+]
 
 [project.scripts]
 me6404-openarm-shaping = "me6404_openarm_shaping.__main__:main"

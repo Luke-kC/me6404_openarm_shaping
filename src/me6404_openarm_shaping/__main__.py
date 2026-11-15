@@ -33,6 +33,13 @@ def main() -> None:
     try:
         model = load_model()
 
+        for name, q in zip(LEFT_ARM_JOINT_NAMES, args.q, strict=True):
+            lower, upper = model.joint(name).range
+            if not np.isfinite(q) or not lower <= q <= upper:
+                raise ValueError(
+                    f"{name}: q={q} must be finite and within [{lower}, {upper}] rad"
+                )
+
         position_indices, velocity_indices = resolve_joint_indices(model)
 
         mass_inertia_matrix = mass_matrix(model, args.q)

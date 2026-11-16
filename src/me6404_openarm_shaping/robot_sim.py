@@ -155,14 +155,13 @@ def main() -> None:
         max(trajectory["t"][-1] for trajectory in trajectories.values())
         + simulation.settling_time_s,
     )
-    g_qf = eval_gravity_torques(model, qf)
 
     recordings: dict[str, TrialRecording] = {}
 
     for label, trajectory in trajectories.items():
         print(f"\nRunning {label} trial\n")
         result = run_trial(
-            model, trajectory, qi, Kp, Kd, g_qf, simulation_time, config=config
+            model, trajectory, qi, Kp, Kd, simulation_time, config=config
         )
         recordings[label] = result
         print_simulation_checks(label, result["simulation_checks"])

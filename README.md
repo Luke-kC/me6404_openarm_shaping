@@ -61,6 +61,35 @@ Only after explicit approval is given can hardware be commanded.
 - **MCAP** files will be used to log data.
 - **MATLAB** can be used for analysis and plotting, but will not be used for simulation/hardware.
 
+## Current workflow
+
+1. Edit `config/robot_config.yaml` (waypoints, gains, limits, and shaping settings).
+2. Run analysis:
+
+   ```bash
+   uv run --frozen --no-sync python -m me6404_openarm_shaping.trajectory_analysis
+   ```
+
+3. Run simulation:
+
+   ```bash
+   uv run --frozen --no-sync python -m me6404_openarm_shaping.robot_sim --save-csv
+   ```
+
+   Check that both commands print the same experiment configuration fingerprint.
+
+`--save-csv` creates `sim_out/` if needed and saves results and metadata in a unique run folder there.
+
+**PASSING SIM** means reference position/velocity/acceleration limits, measured position/velocity limits, torque clipping, collision checks, settling, and data validity all passed.
+
+Measured acceleration is diagnostic only; the named closed left finger-pair contact is informational.
+
+For a quick waypoint preview, set `input_shaping.enabled: false` in the YAML, adjust `waypoints`, and run `robot_sim` without saving:
+
+```bash
+uv run --frozen --no-sync python -m me6404_openarm_shaping.robot_sim
+```
+
 ---
 
 ## M0 - Project Proposal
@@ -261,4 +290,3 @@ natural_freq_hz = omega_n / (2 * np.pi)
 3. Generate **one complete joint-space trajectory**, evaluate its modal behavior along the motion, and design/apply either the **trajectory-specific fixed** shaper or a separately validated **offline continuously configuration-scheduled**.
 4. Replay/preview the resulting command in MuJoCo. Provide a simple **approve / reject** step before any real motion, probably through a CLI.
 5. Execute one unshaped and one shaped mission with recorded results.
-

@@ -5,6 +5,8 @@ import mujoco
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from me6404_openarm_shaping.data_types import FloatMatrix, FloatVector, ModalProperties
+
 MODEL_PATH: Path = (
     Path(__file__).resolve().parents[2]
     / "third_party/openarm_mujoco/v1/openarm_bimanual.xml"
@@ -28,12 +30,25 @@ def load_model() -> mujoco.MjModel:
     return mujoco.MjModel.from_xml_path(str(MODEL_PATH))
 
 
+def check_joint_configuration(model: mujoco.MjModel, q: ArrayLike) -> None:
+
+    q = np.asarray(q)
+
+    for name, qi in zip(LEFT_ARM_JOINT_NAMES, q, strict=True):
+        lower, upper = model.joint(name).range
+
+        if not np.isfinite(qi) or not lower <= qi <= upper:
+            raise ValueError(
+                f"{name}: q={qi} must be finite and within [{lower}, {upper}] rad"
+            )
+
+
 def resolve_joint_indices(
     model: mujoco.MjModel,
     joint_names: Sequence[str] = LEFT_ARM_JOINT_NAMES,
-):
+) -> tuple[NDArray[np.intp], NDArray[np.intp]]:
 
-    joint_ids = []
+    joint_ids: list[int] = []
 
     for name in joint_names:
         joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
@@ -45,22 +60,16 @@ def resolve_joint_indices(
     )
 
 
-def nominal_configuration(model: mujoco.MjModel) -> NDArray[np.float64]:
+def nominal_configuration(model: mujoco.MjModel) -> FloatVector:
+    """Return a copy of qpos0 with no gripper overrides.
 
-    nominal = np.array(model.qpos0, dtype=np.float64, copy=True)
-
-    # Set the fingers to midpoints
-    for name in FINGER_JOINT_NAMES:
-        joint_id: int = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
-
-        lower, upper = model.jnt_range[joint_id]
-
-        nominal[model.jnt_qposadr[joint_id]] = (lower + upper) / 2
-
-    return nominal
+    The pinned model defaults all four finger positions to zero metres.
+    This matches fresh MjData initialization; it does not lock the fingers.
+    """
+    return np.array(model.qpos0, dtype=np.float64, copy=True)
 
 
-def mass_matrix(model: mujoco.MjModel, q: ArrayLike) -> NDArray[np.float64]:
+def mass_matrix(model: mujoco.MjModel, q: ArrayLike) -> FloatMatrix:
     """
     Calculates the mass inertia matrix, M(q), at joint configuration q.
     For one 7-DoF OpenArm, this result is 7x7
@@ -80,7 +89,7 @@ def mass_matrix(model: mujoco.MjModel, q: ArrayLike) -> NDArray[np.float64]:
     return M[np.ix_(velocity_indices, velocity_indices)]
 
 
-def eval_gravity_torques(model: mujoco.MjModel, q: ArrayLike):
+def eval_gravity_torques(model: mujoco.MjModel, q: ArrayLike) -> FloatVector:
     """
     Calculates the constant gravity torques, g(q), at joint configuration q.
     For one 7-DoF OpenArm, this result is 7x1
@@ -105,14 +114,14 @@ def eval_gravity_torques(model: mujoco.MjModel, q: ArrayLike):
 
 def gravitational_stiffness(
     model: mujoco.MjModel, q: ArrayLike, epsilon: float = 0.001
-):
+) -> FloatMatrix:
     """
     Calculates the gravitational stiffness matrix, Kg(q), at joint configuraion q.
     Kg(q) = dg(q)/dq
     For one 7-DoF OpenArm, this result is 7x7
     epsilon is the central-difference step in radians.
     """
-    position_indices, velocity_indices = resolve_joint_indices(model)
+    position_indices, _ = resolve_joint_indices(model)
 
     n = len(position_indices)
     Kg = np.zeros((n, n))
@@ -135,8 +144,10 @@ def gravitational_stiffness(
 def state_matrix(
     model: mujoco.MjModel,
     q: ArrayLike,
-):
-    position_indices, velocity_indices = resolve_joint_indices(model)
+    motor_kp: ArrayLike,
+    motor_kd: ArrayLike,
+) -> FloatMatrix:
+    position_indices, _ = resolve_joint_indices(model)
 
     n = len(position_indices)
 
@@ -145,15 +156,13 @@ def state_matrix(
 
     M = mass_matrix(model, q)
 
-    Kp = [70, 70, 70, 60, 10, 10, 10]
     Kg = gravitational_stiffness(model, q)
 
-    Keff = np.diag(Kp) + Kg
+    Keff = np.diag(motor_kp) + Kg
 
-    motor_Kd = [2.75, 2.5, 2.00, 2.00, 0.70, 0.60, 0.50]
     passive_damping = 0.4
 
-    Deff = np.diag(motor_Kd) + passive_damping * np.identity(n)
+    Deff = np.diag(motor_kd) + passive_damping * np.identity(n)
 
     A3 = -np.linalg.solve(M, Keff)
     A4 = -np.linalg.solve(M, Deff)
@@ -163,7 +172,42 @@ def state_matrix(
     return A
 
 
-def modal_report(A: NDArray[np.float64], tol: float = 1e-10):
+def modal_properties(
+    model: mujoco.MjModel,
+    q: ArrayLike,
+    motor_kp: ArrayLike,
+    motor_kd: ArrayLike,
+    tol: float = 1e-10,
+) -> ModalProperties:
+    """Return frozen-q, zero-velocity properties of the closed-loop state matrix.
+
+    Oscillatory arrays contain one pole per conjugate pair, sorted by natural
+    frequency (not tracked physical mode identity).
+    Frequencies are Hz and damping ratios dimensionless.
+    Real poles are returned separately in 1/s.
+    The oscillatory mode count may change with q.
+    """
+    check_joint_configuration(model, q)
+
+    poles = np.linalg.eigvals(state_matrix(model, q, motor_kp, motor_kd))
+
+    oscillatory = poles[np.imag(poles) > tol]
+
+    oscillatory = oscillatory[np.argsort(np.abs(oscillatory))]
+
+    omega_n = np.abs(oscillatory)
+
+    return {
+        "eigenvalues": oscillatory,
+        "natural_frequency_hz": omega_n / (2 * np.pi),
+        "damped_frequency_hz": np.imag(oscillatory) / (2 * np.pi),
+        "damping_ratio": -np.real(oscillatory) / omega_n,
+        "real_eigenvalues": np.sort(np.real(poles[np.abs(np.imag(poles)) <= tol])),
+        "stable": bool(np.all(np.real(poles) < 0.0)),
+    }
+
+
+def modal_report(A: FloatMatrix, tol: float = 1e-10) -> None:
 
     eigenvalues, eigenvectors = np.linalg.eig(A)
 

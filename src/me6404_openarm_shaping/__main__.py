@@ -4,10 +4,12 @@ import argparse
 
 import numpy as np
 
+from me6404_openarm_shaping.configuration import load_robot_config
 from me6404_openarm_shaping.robot_model import (
     LEFT_ARM_JOINT_NAMES,
     MODEL_PATH,
     MODEL_REVISION,
+    check_joint_configuration,
     eval_gravity_torques,
     gravitational_stiffness,
     load_model,
@@ -32,13 +34,10 @@ def main() -> None:
 
     try:
         model = load_model()
+        config = load_robot_config()
+        motor_kp, motor_kd = config.motor_kp, config.motor_kd
 
-        for name, q in zip(LEFT_ARM_JOINT_NAMES, args.q, strict=True):
-            lower, upper = model.joint(name).range
-            if not np.isfinite(q) or not lower <= q <= upper:
-                raise ValueError(
-                    f"{name}: q={q} must be finite and within [{lower}, {upper}] rad"
-                )
+        check_joint_configuration(model, args.q)
 
         position_indices, velocity_indices = resolve_joint_indices(model)
 
@@ -50,7 +49,7 @@ def main() -> None:
 
         grav_stiffness_matrix = gravitational_stiffness(model, args.q)
 
-        A = state_matrix(model, args.q)
+        A = state_matrix(model, args.q, motor_kp, motor_kd)
 
     except (ValueError, OSError, np.linalg.LinAlgError) as error:
         parser.error(str(error))
@@ -61,7 +60,7 @@ def main() -> None:
     print(f"Selected joints: {', '.join(LEFT_ARM_JOINT_NAMES)}")
     print(f"Position indices: {position_indices.tolist()}")
     print(f"Velocity indices: {velocity_indices.tolist()}")
-    print("Nominal: arms at qpos0 (zero rad); all four fingers at 0.022 m.")
+    print("Nominal: unselected coordinates at model qpos0; fingers at zero metres.")
 
     print("\n----------MASS MATRIX----------")
     print(f"Mass matrix shape: {mass_inertia_matrix.shape}; units: kg m^2")

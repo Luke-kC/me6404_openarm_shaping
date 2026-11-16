@@ -1,190 +1,195 @@
 import argparse
-import time
-from datetime import datetime
+from hashlib import sha256
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import mujoco
-import mujoco.viewer
 import numpy as np
+from numpy.typing import NDArray
 
-from me6404_openarm_shaping.robot_model import (
-    load_model,
-    nominal_configuration,
-    resolve_joint_indices,
+from me6404_openarm_shaping.configuration import (
+    experiment_fingerprint,
+    load_robot_config,
 )
-from me6404_openarm_shaping.trajectories import synchronized_trajectory
+from me6404_openarm_shaping.data_types import (
+    FloatMatrix,
+    FloatVector,
+    JointTrajectory,
+    ModalProperties,
+    RunProvenance,
+    ShaperDesign,
+    TrialRecording,
+)
+from me6404_openarm_shaping.input_shaping import (
+    design_zvd_shaper,
+    suggest_zvd_parameters,
+)
+from me6404_openarm_shaping.robot_model import (
+    MODEL_PATH,
+    MODEL_REVISION,
+    check_joint_configuration,
+    eval_gravity_torques,
+    load_model,
+    modal_properties,
+)
+from me6404_openarm_shaping.simulation_helpers import (
+    capture_run_provenance,
+    plot_comparison,
+    run_trial,
+    save_experiment,
+)
+from me6404_openarm_shaping.simulation_safety import print_simulation_checks
+from me6404_openarm_shaping.trajectories import (
+    apply_shaper_to_joint_trajectory,
+    waypoint_trajectory,
+)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Simulate and plot the left-arm trajectory.")
+    parser: argparse.ArgumentParser = argparse.ArgumentParser(
+        description="Simulate and plot the left-arm trajectory."
+    )
     parser.add_argument(
         "--save-csv",
         action="store_true",
-        help="save full-resolution recordings to a uniquely named CSV in sim_out/",
+        help="save results and metadata in a new uniquely named folder in sim_out/",
     )
-    args = parser.parse_args()
-    simulation_time = 1.5  # Simulated seconds; edit to change the run duration.
-    model = load_model()
-    data = mujoco.MjData(model)
-
-    position_indices, velocity_indices = resolve_joint_indices(model)
-    actuator_names = tuple(f"left_joint{i}_ctrl" for i in range(1, 8))
-    actuator_indices = np.array(
-        [
-            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
-            for name in actuator_names
-        ],
-        dtype=np.intp,
+    args: argparse.Namespace = parser.parse_args()
+    provenance: RunProvenance | None = (
+        capture_run_provenance() if args.save_csv else None
     )
-    if np.any(actuator_indices < 0):
-        raise ValueError("Could not resolve all seven left-arm motor actuators.")
 
-    Kp = np.array([70, 70, 70, 60, 10, 10, 10], dtype=np.float64)
-    Kd = np.array([2.75, 2.50, 2.00, 2.00, 0.70, 0.60, 0.50]) * 0.8
-
-    if not np.all(model.actuator_forcelimited[actuator_indices]):
-        raise ValueError("Expected force-limited left-arm motor actuators.")
-
-    torque_limits = model.actuator_forcerange[actuator_indices]
-
-    qi = nominal_configuration(model)[position_indices]
-    qf = np.array([-0.3, -0.7, -0.6, 1.5, 0.2, -0.4, 0.2])
-    v_lim = np.ones(7) * 50.0
-    a_lim = np.ones(7) * 100.0
-
-    t, q, dq, ddq = synchronized_trajectory(qi, qf, v_lim, a_lim, dt=model.opt.timestep)
-
-    time_history = []
-    angle_history = []
-    requested_history = []
-    feedback_history = []
-    step_count = int(np.ceil(simulation_time / model.opt.timestep))
-
-    data.qpos[position_indices] = qi
-    mujoco.mj_forward(model, data)
-
-    with mujoco.viewer.launch_passive(model, data) as viewer:
-        step_index = 0
-        step_deadline = time.perf_counter()
-        next_sync = step_deadline
-        sync_interval = 1.0 / 60.0
-
-        while step_index < step_count and viewer.is_running():
-            target_index = min(step_index, len(q) - 1)
-
-            q_measured = data.qpos[position_indices]
-            dq_measured = data.qvel[velocity_indices]
-
-            # torque = Kp * (q[target_index] - q_measured) + Kd * (
-            #     dq[target_index] - dq_measured
-            # )
-
-            torque = Kp * (q[target_index] - q_measured) + Kd * (
-                dq[target_index] * 0 - dq_measured
-            )
-
-            if not np.isfinite(torque).all():
-                raise ValueError("Nonfinite left-arm torque; stopping simulation.")
-
-            data.ctrl[actuator_indices] = np.clip(
-                torque, torque_limits[:, 0], torque_limits[:, 1]
-            )
-
-            # mj_step evaluates actuator force at the pre-integration state.
-            sample_time = data.time
-            sample_angles = q_measured.copy()
-            mujoco.mj_step(model, data)
-            time_history.append(sample_time)
-            angle_history.append(sample_angles)
-            requested_history.append(torque.copy())
-            feedback_history.append(data.actuator_force[actuator_indices].copy())
-            step_index += 1
-
-            now = time.perf_counter()
-            if now >= next_sync:
-                viewer.sync()
-                next_sync = now + sync_interval
-
-            step_deadline += model.opt.timestep
-            sleep_time = step_deadline - time.perf_counter()
-            if sleep_time > 0:
-                time.sleep(sleep_time)
-
-    times = np.asarray(time_history)
-    angles = np.asarray(angle_history)
-    requested_values = np.asarray(requested_history)
-    feedback_values = np.asarray(feedback_history)
-
-    if args.save_csv and time_history:
-        output_dir = Path(__file__).resolve().parents[2] / "sim_out"
-        output_dir.mkdir(exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        output_path = output_dir / f"simulation_{timestamp}.csv"
-        columns = ["time_s"]
-        for quantity in ("q_rad", "torque_requested_Nm", "torque_feedback_Nm"):
-            columns.extend(f"J{i}_{quantity}" for i in range(1, 8))
-        with output_path.open("x") as output_file:
-            np.savetxt(
-                output_file,
-                np.column_stack((times, angles, requested_values, feedback_values)),
-                delimiter=",",
-                header=",".join(columns),
-                comments="",
-            )
-        print(f"Saved simulation results: {output_path}")
-
-    # Decimate only the plots; recordings and CSV retain every simulation step.
-    max_plot_points = 500
-    trajectory_points = np.linspace(
-        0, len(t) - 1, min(len(t), max_plot_points), dtype=int
+    model: mujoco.MjModel = load_model()
+    config = load_robot_config()
+    model_sha256 = (
+        provenance["model_sha256"]
+        if provenance is not None
+        else sha256(MODEL_PATH.read_bytes()).hexdigest()
     )
-    joint_labels = [f"J{i}" for i in range(1, 8)]
-    fig, axs = plt.subplots(3, 1, sharex=True, num="Calculated trajectory")
-    for ax, values, ylabel in zip(
-        axs,
-        (q, dq, ddq),
-        ("Position [rad]", "Velocity [rad/s]", "Acceleration [rad/s²]"),
+    configuration_sha256 = experiment_fingerprint(config, model_sha256, MODEL_REVISION)
+    print(f"\nExperiment configuration: {configuration_sha256}\n")
+
+    Kp = config.motor_kp
+    Kd = config.motor_kd
+
+    simulation = config.simulation
+
+    shaping = config.input_shaping
+
+    model.opt.timestep = simulation.dt_s
+
+    simulation_time: float = simulation.minimum_duration_s
+
+    waypoints = config.waypoints
+
+    qi = waypoints[0]
+
+    for waypoint in waypoints:
+        check_joint_configuration(model, waypoint)
+    qf = waypoints[-1]
+
+    v_lim = config.velocity_limits
+    a_lim = config.acceleration_limits
+
+    t: FloatVector
+    q: FloatMatrix
+    dq: FloatMatrix
+    ddq: FloatMatrix
+    t, q, dq, ddq = waypoint_trajectory(waypoints, v_lim, a_lim, dt=model.opt.timestep)
+    trajectories: dict[str, JointTrajectory] = {
+        "unshaped": {"t": t, "q": q, "dq": dq, "ddq": ddq}
+    }
+    shaper_design: ShaperDesign | None = None
+
+    if shaping.enabled:
+        # One fixed design from every sample across all unshaped segments.
+        properties: list[ModalProperties] = [
+            modal_properties(model, configuration, Kp, Kd) for configuration in q
+        ]
+
+        frequencies_hz: FloatVector
+        damping: FloatVector
+        utilization: FloatVector
+        frequencies_hz, damping, utilization = suggest_zvd_parameters(
+            properties,
+            tau_min=shaping.zvd.tau_min_s,
+            utilization_min=shaping.zvd.utilization_min,
+        )
+        print("\n----- SHAPER DESIGN -----\n")
+        print("Suggested shaper natural frequencies [Hz]:", frequencies_hz)
+        print("Suggested shaper damping ratios:", damping)
+        print("Suggested frequency-band utilization:", utilization)
+        print()
+        amplitudes: FloatVector
+        delays_s: FloatVector
+        amplitudes, delays_s = design_zvd_shaper(frequencies_hz, damping)
+        delay_steps: NDArray[np.intp] = np.rint(delays_s / model.opt.timestep).astype(
+            np.intp
+        )
+        shaper_design = {
+            "type": shaping.type,
+            "natural_frequencies_hz": frequencies_hz.tolist(),
+            "damping_ratios": damping.tolist(),
+            "band_utilization": utilization.tolist(),
+            "amplitudes": amplitudes.tolist(),
+            "ideal_delays_s": delays_s.tolist(),
+            "rounded_delay_steps": delay_steps.tolist(),
+            "applied_delays_s": (delay_steps * model.opt.timestep).tolist(),
+        }
+        t_shaped: FloatVector
+        q_shaped: FloatMatrix
+        dq_shaped: FloatMatrix
+        ddq_shaped: FloatMatrix
+        t_shaped, q_shaped, dq_shaped, ddq_shaped = apply_shaper_to_joint_trajectory(
+            q, dq, ddq, amplitudes, delays_s, model.opt.timestep
+        )
+        trajectories["shaped"] = {
+            "t": t_shaped,
+            "q": q_shaped,
+            "dq": dq_shaped,
+            "ddq": ddq_shaped,
+        }
+
+    simulation_time = max(
+        simulation_time,
+        max(trajectory["t"][-1] for trajectory in trajectories.values())
+        + simulation.settling_time_s,
+    )
+    g_qf = eval_gravity_torques(model, qf)
+
+    recordings: dict[str, TrialRecording] = {}
+
+    for label, trajectory in trajectories.items():
+        print(f"\nRunning {label} trial\n")
+        result = run_trial(
+            model, trajectory, qi, Kp, Kd, g_qf, simulation_time, config=config
+        )
+        recordings[label] = result
+        print_simulation_checks(label, result["simulation_checks"])
+        if not result["completed"]:
+            print(
+                "Viewer closed early; stopping comparison and retaining collected data."
+            )
+            break
+
+    if provenance is not None and any(
+        len(result["t"]) for result in recordings.values()
     ):
-        ax.plot(t[trajectory_points], values[trajectory_points], label=joint_labels)
-        ax.set_ylabel(ylabel)
-        ax.grid(True)
-    axs[0].legend(ncol=7)
-    axs[-1].set_xlabel("Time [s]")
-    fig.tight_layout()
+        output_dir: Path = Path(__file__).resolve().parents[2] / "sim_out"
+        run_dir: Path = save_experiment(
+            recordings,
+            config,
+            shaper_design,
+            simulation_time,
+            output_dir,
+            provenance=provenance,
+            configuration_fingerprint=configuration_sha256,
+        )
+        print("\nSaved simulation results and metadata:")
+        print(run_dir)
+        print()
 
-    if time_history:
-        result_points = np.linspace(
-            0, len(times) - 1, min(len(times), max_plot_points), dtype=int
-        )
-        result_fig, result_axs = plt.subplots(
-            2, 1, sharex=True, num="Recorded left-arm joints"
-        )
-        angle_lines = result_axs[0].plot(
-            times[result_points], angles[result_points], label=joint_labels
-        )
-        for i, line in enumerate(angle_lines):
-            result_axs[1].plot(
-                times[result_points],
-                requested_values[result_points, i],
-                color=line.get_color(),
-                linestyle="--",
-                label="Requested (dashed)" if i == 0 else "_nolegend_",
-            )
-            result_axs[1].plot(
-                times[result_points],
-                feedback_values[result_points, i],
-                color=line.get_color(),
-                label="Feedback (solid)" if i == 0 else "_nolegend_",
-            )
-        result_axs[0].set_ylabel("Position [rad]")
-        result_axs[0].legend(ncol=7)
-        result_axs[1].set_ylabel("Motor torque [N·m]")
-        result_axs[1].legend()
-        result_axs[-1].set_xlabel("Simulation time [s]")
-        for ax in result_axs:
-            ax.grid(True)
-        result_fig.tight_layout()
+    plot_comparison(trajectories, recordings)
     plt.show()
 
 

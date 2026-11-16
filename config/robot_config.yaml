@@ -1,0 +1,42 @@
+# Joint order: left J1 through J7
+# J1, J2 are shoulders, J4 is elbow, J7 is wrist
+
+# Kp: N*m/rad; Kd: N*m*s/rad
+
+# Original hardware values:
+# motor_kp: [70, 70, 70, 60, 10, 10, 10]
+# motor_kd: [2.75, 2.50, 2.00, 2.00, 0.70, 0.60, 0.50]
+
+motor_kp: [70, 70, 70, 60, 10, 10, 10]
+motor_kd: [0.55, 0.5, 0.4, 0.4, 0.14, 0.12, 0.10]
+
+# Symmetric joint velocity limits [rad/s]
+velocity_limits: [5, 5, 5, 5, 5, 5, 5]
+
+# Symmetric joint acceleration limits [rad/s^2]
+acceleration_limits: [10, 10, 10, 10, 10, 10, 10]
+
+# Complete path, including the starting configuration. J1--J7 in radians.
+# Can add more waypoints.
+waypoints:
+  - [0.0, 0.0, 0.0, 0.05, 0.0, 0.0, 0.0] # Keep J4 at 0.05 initially to prevent out of bound
+  - [-1.3580386162129878, -1.1498586835413294, -1.133364907704282, 2.0070781193655, -0.269567712896148, -0.5609540565432639, -0.05478717022070567]
+  - [0.5563445587994549, -2.1982054327681473, -0.29297959889501235, 0.23308888746698414, 0.06975122106824427, -0.13706176368869427, 0.9468301583487466]
+
+simulation:
+  dt_s: 0.002 # Simulation step size
+  minimum_duration_s: 5.0 # minimum simulation duration, if trajectory is longer than this, it will use the final trajectory time + settling_time_s
+  settling_time_s: 1.0
+
+# Assessment of measured motion, not just the generated reference.
+simulation_assessment:
+  settling_window_s: 0.25
+  position_tolerance_rad: 0.01
+  velocity_tolerance_rad_s: 0.01
+
+input_shaping:
+  enabled: true
+  type: zvd
+  zvd:
+    tau_min_s: 0.1 # decay time constant threshold
+    utilization_min: 0.3 # shaper utilization threshold

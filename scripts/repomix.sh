@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-npx repomix --include "src/**,tests/**,AGENTS.md,README.md,pyproject.toml,.gitmodules,third_party/openarm_mujoco/v1/openarm_bimanual.xml"
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+
+npx repomix --ignore "third_party/**/meshes/**,third_party/**/assets/**,third_party/**/media/**,third_party/**/web/**,repomix-output.*"

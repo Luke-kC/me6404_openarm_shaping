@@ -14,4 +14,4 @@ wheels/
 typings/
 
 repomix-output.xml
-*.csv
+/sim_out/

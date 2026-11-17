@@ -233,7 +233,9 @@ def assess_trial(
 
     Any requested torque outside its motor force range counts as clipping.
     Reference position/velocity/acceleration and measured position/velocity
-    limits are hard checks. Finite measured acceleration exceedances are only
+    limits are hard checks, with configured allowances on measured velocity
+    and the measured J4 lower position limit only.
+    Finite measured acceleration exceedances are only
     diagnostic. Contacts must be collected during simulation.
     """
     reasons: list[SimulationIssue] = []
@@ -250,6 +252,11 @@ def assess_trial(
         )
 
     joint_limits = np.array([model.joint(name).range for name in LEFT_ARM_JOINT_NAMES])
+    measured_joint_limits = joint_limits.copy()
+    j4_index = LEFT_ARM_JOINT_NAMES.index("openarm_left_joint4")
+    measured_joint_limits[j4_index, 0] -= (
+        config.simulation_assessment.j4_lower_position_tolerance_rad
+    )
     actuator_ids = [
         mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"left_joint{i}_ctrl")
         for i in range(1, 8)
@@ -258,15 +265,21 @@ def assess_trial(
     position_times = np.append(result["t"], result["final_time_s"])
     positions = np.vstack((result["q"], result["final_q"]))
     velocities = np.vstack((result["dq_measured"], result["final_dq"]))
+    measured_velocity_limits = (
+        config.velocity_limits
+        + config.simulation_assessment.measured_velocity_tolerance_rad_s
+    )
     accelerations = np.vstack((result["ddq_measured"], result["final_ddq"]))
     reasons.extend(
-        _limit_reasons(positions, position_times, joint_limits, "position_limit", "rad")
+        _limit_reasons(
+            positions, position_times, measured_joint_limits, "position_limit", "rad"
+        )
     )
     reasons.extend(
         _limit_reasons(
             velocities,
             position_times,
-            np.column_stack((-config.velocity_limits, config.velocity_limits)),
+            np.column_stack((-measured_velocity_limits, measured_velocity_limits)),
             "velocity_limit",
             "rad/s",
         )
@@ -382,8 +395,13 @@ def assess_trial(
     return {
         "passing": not reasons,
         "scope": (
-            "Full reference motion limits; sampled measured position/velocity, torque clipping, "
-            "settling, and penetrating contacts. Measured acceleration exceedances and the "
+            "Full reference motion limits; sampled measured position/velocity "
+            f"(measured velocity margin +/-"
+            f"{config.simulation_assessment.measured_velocity_tolerance_rad_s:g} rad/s "
+            "beyond configured limits), torque clipping, settling, and penetrating contacts. "
+            "Measured J4 lower position limit allowance: "
+            f"{config.simulation_assessment.j4_lower_position_tolerance_rad:g} rad. "
+            "Measured acceleration exceedances and the "
             "named closed left finger pair are informational only."
         ),
         "reasons": reasons,

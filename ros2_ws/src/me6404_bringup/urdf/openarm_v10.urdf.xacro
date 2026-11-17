@@ -1,0 +1,64 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!--
+Copyright 2025 Enactic, Inc.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Project-local v1 entry point; geometry and hardware macros remain upstream.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="openarm">
+  <xacro:include filename="$(find openarm_description)/assets/robot/openarm_v1.0/urdf/robot/openarm_robot.xacro"/>
+
+  <xacro:arg name="use_fake_hardware" default="true"/>
+  <xacro:arg name="left_can_interface" default="can1"/>
+  <xacro:arg name="right_can_interface" default="can0"/>
+  <xacro:arg name="control_gains_file" default="$(find me6404_bringup)/config/control_gains.yaml"/>
+  <xacro:property name="control_gains_path" value="$(arg control_gains_file)"/>
+  <xacro:property name="arm_cfg_root" value="$(find openarm_description)/assets/robot/openarm_v1.0/config/arm"/>
+  <xacro:property name="body_cfg_root" value="$(find openarm_description)/assets/robot/openarm_v1.0/config/body"/>
+  <xacro:property name="parallel_link_cfg_root" value="$(find openarm_description)/assets/end_effector/parallel_link/config"/>
+
+  <xacro:openarm_robot
+    arm_type="v10"
+    body_type="v10"
+    joint_limits="${xacro.load_yaml(arm_cfg_root + '/joint_limits.yaml')}"
+    control_gains="${xacro.load_yaml(control_gains_path)}"
+    inertials="${xacro.load_yaml(arm_cfg_root + '/inertials.yaml')}"
+    kinematics="${xacro.load_yaml(arm_cfg_root + '/kinematics.yaml')}"
+    kinematics_link="${xacro.load_yaml(arm_cfg_root + '/kinematics_link.yaml')}"
+    kinematics_offset="${xacro.load_yaml(arm_cfg_root + '/kinematics_offset.yaml')}"
+    body_inertials="${xacro.load_yaml(body_cfg_root + '/inertials.yaml')}"
+    body_kinematics="${xacro.load_yaml(body_cfg_root + '/kinematics.yaml')}"
+    body_kinematics_link="${xacro.load_yaml(body_cfg_root + '/kinematics_link.yaml')}"
+    ee_inertials="${xacro.load_yaml(parallel_link_cfg_root + '/inertials.yaml')}"
+    ee_kinematics="${xacro.load_yaml(parallel_link_cfg_root + '/kinematics.yaml')}"
+    ee_kinematics_link="${xacro.load_yaml(parallel_link_cfg_root + '/kinematics_link.yaml')}"
+    ee_joints_limits="${xacro.load_yaml(parallel_link_cfg_root + '/joint_limits.yaml')}"
+    ee_type="parallel_link"
+    ros2_control="true"
+    left_can_interface="$(arg left_can_interface)"
+    right_can_interface="$(arg right_can_interface)"
+    left_arm_prefix="left_"
+    right_arm_prefix="right_"
+    use_fake_hardware="$(arg use_fake_hardware)"
+    fake_sensor_commands="false"
+    no_prefix="false"
+    arm_prefix=""
+    body_prefix=""
+    arm_connected_to="base"
+    body_connected_to="world"
+    bimanual="true"
+    right_arm_base_xyz="0.0 -0.031 0.698"
+    left_arm_base_xyz="0.0 0.031 0.698"
+    right_arm_base_rpy="1.5708 0 0"
+    left_arm_base_rpy="-1.5708 0 0"
+    can_fd="false"
+  />
+</robot>

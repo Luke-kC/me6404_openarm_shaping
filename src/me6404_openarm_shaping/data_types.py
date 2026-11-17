@@ -132,6 +132,7 @@ class TrialSamples(TypedDict):
 
 class TrialRecording(TrialSamples):
     torque_feedback: FloatMatrix
+    torque_gravity_ff: FloatMatrix
     q_command: FloatMatrix
     dq_reference: FloatMatrix
     ddq_reference: FloatMatrix

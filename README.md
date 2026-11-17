@@ -92,6 +92,37 @@ uv run --frozen --no-sync python -m me6404_openarm_shaping.robot_sim
 
 ---
 
+### Record a physical CSV trial
+
+With ROS Jazzy and the built workspace already sourced, and bringup already
+running with the trajectory controller:
+
+```bash
+python3 scripts/record_csv_trial.py \
+  --csv sim_out/<run>/<run>_results.csv \
+  --trajectory unshaped --gravity-scale 1.0
+```
+
+`gravity-scale` is a simple scalar that can be used to reduce the magnitude of the gravity feed-forward torque.
+
+This wrapper does not launch bringup or enable motors.
+
+Each run creates `hardware_out/<shaped|unshaped>/run_<timestamp>_<unique>/` containing
+the original-named CSV and simulation metadata, `trial.json` (arguments, requested
+topics and outcome), recorder QoS settings/log, and `bag/` with MCAP and rosbag
+metadata. The MCAP storage plugin must already be installed.
+
+Accepted trajectory payloads are copied to
+`/me6404/commanded_trajectory`, a transient-local **diagnostic topic, not a
+hardware command input**. 
+
+
+**Ctrl-C or recorder failure does not cancel motion or disable motors.**
+Use the established robot stop/E-stop procedure when needed. The wrapper
+attempts to finalize the bag on exit; inspect partial recordings after failures.
+
+---
+
 ## M0 - Project Proposal
 **Objective**: Create a project proposal to present with.
 

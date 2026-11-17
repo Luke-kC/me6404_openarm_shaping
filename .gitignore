@@ -15,6 +15,7 @@ typings/
 
 repomix-output.xml
 /sim_out/
+/hardware_out/
 
 /ros2_ws/build
 /ros2_ws/log

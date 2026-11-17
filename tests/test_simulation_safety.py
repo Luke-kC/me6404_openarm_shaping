@@ -41,7 +41,7 @@ def model() -> mujoco.MjModel:
 def _config() -> RobotConfig:
     config = load_robot_config()
     config.waypoints = np.zeros((2, 7))
-    config.simulation_assessment = SimulationAssessmentConfig(0.002, 0.01, 0.01)
+    config.simulation_assessment = SimulationAssessmentConfig(0.002, 0.01, 0.01, 0.05, 0.05)
     return config
 
 
@@ -76,6 +76,55 @@ def _result() -> TrialSamples:
     }
 
 
+@pytest.mark.parametrize("margin", [0.0, 0.05, 0.1])
+@pytest.mark.parametrize("final", [False, True])
+@pytest.mark.parametrize("excess", [-0.001, 0.0, 0.001])
+def test_j4_measured_lower_position_tolerance(
+    model: mujoco.MjModel, margin: float, final: bool, excess: float
+) -> None:
+    config = _config()
+    config.simulation_assessment.j4_lower_position_tolerance_rad = margin
+    result = _result()
+    lower = model.joint("openarm_left_joint4").range[0] - margin
+    if final:
+        result["final_q"][3] = lower - excess
+    else:
+        result["q"][0, 3] = lower - excess
+    report = assess_recording(
+        model, result, config, command_end_time_s=0.0, trajectory=_reference()
+    )
+    # Settling is deliberately separate from the measured position check.
+    assert report["categories"]["position_limits"] is (excess <= 0)
+    if excess > 0:
+        reason = next(r for r in report["reasons"] if r["kind"] == "position_limit")
+        assert "lower_limit" in reason
+        assert reason["lower_limit"] == lower
+        assert reason["first_time_s"] == (result["final_time_s"] if final else 0.0)
+
+
+@pytest.mark.parametrize("case", ["j4-reference-lower", "j4-measured-upper", "j1-measured-lower"])
+def test_j4_allowance_does_not_relax_other_position_limits(
+    model: mujoco.MjModel, case: str
+) -> None:
+    result = _result()
+    reference = _reference()
+    category: Literal["reference_limits", "position_limits"]
+    if case == "j4-reference-lower":
+        reference["q"][0, 3] = -0.001
+        category = "reference_limits"
+    elif case == "j4-measured-upper":
+        result["q"][0, 3] = model.joint("openarm_left_joint4").range[1] + 0.001
+        category = "position_limits"
+    else:
+        result["q"][0, 0] = model.joint("openarm_left_joint1").range[0] - 0.001
+        category = "position_limits"
+    report = assess_recording(
+        model, result, _config(), command_end_time_s=0.0, trajectory=reference
+    )
+    assert not report["categories"][category]
+    assert any(reason["kind"] == "position_limit" for reason in report["reasons"])
+
+
 def test_clean_completed_trial_passes(model: mujoco.MjModel) -> None:
     report = assess_trial(model, _result())
     assert report["passing"]
@@ -100,7 +149,7 @@ def test_reference_limits_are_hard_checks(
     elif quantity == "q":
         reference["q"][0, 0] = 100.0  # Beyond the pinned arm's joint range.
     elif quantity == "dq":
-        reference["dq"][0, 0] = config.velocity_limits[0] + 0.1
+        reference["dq"][0, 0] = config.velocity_limits[0] + 0.01
     else:
         reference["ddq"][0, 0] = -config.acceleration_limits[0] - 0.1
     report = assess_recording(
@@ -226,9 +275,48 @@ def test_measured_motion_limits_include_final_state(
     assert reason["first_value"] == limit + 1
     assert reason["worst_time_s"] == pytest.approx(0.006)
     assert reason["worst_value"] == limit + 3
-    assert reason["lower_limit"] == -limit
-    assert reason["upper_limit"] == limit
+    margin = (
+        config.simulation_assessment.measured_velocity_tolerance_rad_s
+        if quantity == "velocity"
+        else 0.0
+    )
+    assert reason["lower_limit"] == -limit - margin
+    assert reason["upper_limit"] == limit + margin
     assert reason["sample_count"] == 3
+
+
+@pytest.mark.parametrize("margin", [0.0, 0.05, 0.12])
+@pytest.mark.parametrize("direction", [-1, 1])
+@pytest.mark.parametrize("final", [False, True])
+@pytest.mark.parametrize("excess", [-0.001, 0.0, 0.001])
+def test_measured_velocity_tolerance_boundary(
+    model: mujoco.MjModel,
+    margin: float,
+    direction: int,
+    final: bool,
+    excess: float,
+) -> None:
+    config = _config()
+    config.simulation_assessment.measured_velocity_tolerance_rad_s = margin
+    result = _result()
+    speed = direction * (config.velocity_limits[0] + margin + excess)
+    if final:
+        result["final_dq"][0] = speed
+    else:
+        result["dq_measured"][0, 0] = speed
+    report = assess_recording(
+        model, result, config, command_end_time_s=0.0, trajectory=_reference()
+    )
+    # Settling remains a separate check, especially for the final-state case.
+    assert report["categories"]["measured_velocity_limits"] is (excess <= 0)
+    issues = [issue for issue in report["reasons"] if issue["kind"] == "velocity_limit"]
+    assert len(issues) == int(excess > 0)
+    if issues:
+        reason = issues[0]
+        assert "lower_limit" in reason
+        assert reason["lower_limit"] == -config.velocity_limits[0] - margin
+        assert reason["upper_limit"] == config.velocity_limits[0] + margin
+        assert reason["first_time_s"] == (result["final_time_s"] if final else 0.0)
 
 
 @pytest.mark.parametrize("final", [False, True])
@@ -249,7 +337,7 @@ def test_nonfinite_derivatives_fail(model: mujoco.MjModel, final: bool) -> None:
 
 def test_settling_uses_target_and_entire_approved_window(model: mujoco.MjModel) -> None:
     config = _config()
-    config.simulation_assessment = SimulationAssessmentConfig(0.25, 0.01, 0.01)
+    config.simulation_assessment = SimulationAssessmentConfig(0.25, 0.01, 0.01, 0.05, 0.05)
     config.waypoints[-1] = 0.1
     result = _result()
     result["t"] = np.array([0.0, 0.25, 0.5])
@@ -369,7 +457,7 @@ def test_closed_finger_contact_is_recorded_but_informational(
 
     # Expected contact must not hide a joint-position violation either.
     result["contact_events"] = [event]
-    result["final_q"][3] = -0.01
+    result["final_q"][3] = -0.06  # Beyond the 0.05 rad measured J4 allowance.
     report = assess_trial(model, result)
     assert not report["passing"]
     assert report["informational_contacts"] == [event]

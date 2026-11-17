@@ -27,6 +27,8 @@ class SimulationAssessmentConfig:
     settling_window_s: float
     position_tolerance_rad: float
     velocity_tolerance_rad_s: float
+    measured_velocity_tolerance_rad_s: float
+    j4_lower_position_tolerance_rad: float
 
 
 @dataclass
@@ -112,6 +114,8 @@ def load_robot_config(
         "settling_window_s",
         "position_tolerance_rad",
         "velocity_tolerance_rad_s",
+        "measured_velocity_tolerance_rad_s",
+        "j4_lower_position_tolerance_rad",
     ):
         value = float(assessment[name])
         if (
@@ -141,6 +145,12 @@ def load_robot_config(
             settling_window_s=assessment["settling_window_s"],
             position_tolerance_rad=assessment["position_tolerance_rad"],
             velocity_tolerance_rad_s=assessment["velocity_tolerance_rad_s"],
+            measured_velocity_tolerance_rad_s=assessment[
+                "measured_velocity_tolerance_rad_s"
+            ],
+            j4_lower_position_tolerance_rad=assessment[
+                "j4_lower_position_tolerance_rad"
+            ],
         ),
     )
 

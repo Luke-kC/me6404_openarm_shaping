@@ -92,10 +92,16 @@ def run_trial(
     measured_accelerations: list[NDArray[np.float64]] = []
     requested: list[NDArray[np.float64]] = []
     feedback: list[NDArray[np.float64]] = []
+    gravity_feedforward: list[NDArray[np.float64]] = []
     commanded_positions: list[NDArray[np.float64]] = []
     reference_velocities: list[NDArray[np.float64]] = []
     reference_accelerations: list[NDArray[np.float64]] = []
     step_count = int(np.ceil(simulation_time / model.opt.timestep))
+
+    # Feedforward depends only on the known commanded pose, not measured state.
+    trajectory_gravity = np.empty_like(trajectory["q"])
+    for index, q_command in enumerate(trajectory["q"]):
+        trajectory_gravity[index] = eval_gravity_torques(model, q_command)
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         # Start each trial framed on the left arm; mouse controls remain free.
@@ -119,7 +125,7 @@ def run_trial(
 
             q_command = trajectory["q"][target_index]
 
-            gravity_ff = eval_gravity_torques(model, q_command)
+            gravity_ff = trajectory_gravity[target_index]
 
             torque = (
                 Kp * (trajectory["q"][target_index] - q_measured)
@@ -158,6 +164,7 @@ def run_trial(
             measured_accelerations.append(sample_accelerations)
             requested.append(torque.copy())
             feedback.append(data.actuator_force[actuator_indices].copy())
+            gravity_feedforward.append(gravity_ff.copy())
             commanded_positions.append(q_command)
             reference_velocities.append(dq_reference)
             reference_accelerations.append(ddq_reference)
@@ -194,6 +201,7 @@ def run_trial(
     return {
         **samples,
         "torque_feedback": np.asarray(feedback).reshape(-1, 7),
+        "torque_gravity_ff": np.asarray(gravity_feedforward).reshape(-1, 7),
         "q_command": np.asarray(commanded_positions).reshape(-1, 7),
         "dq_reference": np.asarray(reference_velocities).reshape(-1, 7),
         "ddq_reference": np.asarray(reference_accelerations).reshape(-1, 7),
@@ -221,6 +229,7 @@ def save_recordings_csv(
         "ddq_reference_rad_s2",
         "dq_measured_rad_s",
         "ddq_measured_rad_s2",
+        "torque_gravity_ff_Nm",
     ):
         columns.extend(f"J{i}_{quantity}" for i in range(1, 8))
     with output_path.open("x", newline="") as stream:
@@ -238,6 +247,7 @@ def save_recordings_csv(
                     result["ddq_reference"],
                     result["dq_measured"],
                     result["ddq_measured"],
+                    result["torque_gravity_ff"],
                 )
             )
             for row in values:

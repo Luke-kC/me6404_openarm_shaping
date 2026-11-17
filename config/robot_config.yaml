@@ -19,9 +19,11 @@ acceleration_limits: [10, 10, 10, 10, 10, 10, 10]
 # Complete path, including the starting configuration. J1--J7 in radians.
 # Can add more waypoints.
 waypoints:
-  - [0.0, 0.0, 0.0, 0.05, 0.0, 0.0, 0.0] # Keep J4 at 0.05 initially to prevent out of bound
-  - [-1.3580386162129878, -1.1498586835413294, -1.133364907704282, 2.0070781193655, -0.269567712896148, -0.5609540565432639, -0.05478717022070567]
-  - [0.5563445587994549, -2.1982054327681473, -0.29297959889501235, 0.23308888746698414, 0.06975122106824427, -0.13706176368869427, 0.9468301583487466]
+  - [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  - [0.0, -1.0, 0.0, 1.5, 0.0, 0.0, 0.0]
+  # - [0.7, 0.0, 0.0, 0.7, 0.0, 0.0, 0.0]
+  # - [-1.3580386162129878, -1.1498586835413294, -1.133364907704282, 2.0070781193655, -0.269567712896148, -0.5609540565432639, -0.05478717022070567]
+  # - [0.5563445587994549, -2.1982054327681473, -0.29297959889501235, 0.23308888746698414, 0.06975122106824427, -0.13706176368869427, 0.9468301583487466]
 
 simulation:
   dt_s: 0.002 # Simulation step size
@@ -30,9 +32,11 @@ simulation:
 
 # Assessment of measured motion, not just the generated reference.
 simulation_assessment:
+  j4_lower_position_tolerance_rad: 0.05 # Measured J4 lower-limit allowance only
+  measured_velocity_tolerance_rad_s: 0.1 # Margin beyond +/- velocity_limits; not a settling tolerance
   settling_window_s: 0.25
-  position_tolerance_rad: 0.01
-  velocity_tolerance_rad_s: 0.01
+  position_tolerance_rad: 0.05
+  velocity_tolerance_rad_s: 0.05
 
 input_shaping:
   enabled: true

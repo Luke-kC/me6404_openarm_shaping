@@ -48,6 +48,7 @@ def _recording(samples: int) -> TrialRecording:
         "ddq_measured": np.full((samples, 7), 0.6),
         "torque_requested": np.full((samples, 7), 2.0),
         "torque_feedback": np.full((samples, 7), 1.0),
+        "torque_gravity_ff": np.full((samples, 7), 0.7),
         "q_command": np.full((samples, 7), 0.2),
         "dq_reference": np.full((samples, 7), 0.3),
         "ddq_reference": np.full((samples, 7), 0.4),
@@ -133,7 +134,7 @@ def test_unshaped_waypoint_trial(
         simulation=SimulationConfig(
             dt_s=0.004, minimum_duration_s=4.5, settling_time_s=0.25
         ),
-        simulation_assessment=SimulationAssessmentConfig(0.25, 0.01, 0.01),
+        simulation_assessment=SimulationAssessmentConfig(0.25, 0.01, 0.01, 0.05, 0.05),
         input_shaping=InputShapingConfig(
             enabled=False, type="zvd", zvd=ZVDConfig(tau_min_s=0.2, utilization_min=0.4)
         ),
@@ -205,7 +206,7 @@ def test_whole_trajectory_shaper_design(monkeypatch: pytest.MonkeyPatch) -> None
         simulation=SimulationConfig(
             dt_s=0.01, minimum_duration_s=5.0, settling_time_s=1.25
         ),
-        simulation_assessment=SimulationAssessmentConfig(0.25, 0.01, 0.01),
+        simulation_assessment=SimulationAssessmentConfig(0.25, 0.01, 0.01, 0.05, 0.05),
         input_shaping=InputShapingConfig(
             enabled=True, type="zvd", zvd=ZVDConfig(tau_min_s=0.2, utilization_min=0.4)
         ),
@@ -300,15 +301,23 @@ def test_trials_start_from_identical_fresh_states(
     step_velocities: list[NDArray[np.float64]] = []
     step_accelerations: list[NDArray[np.float64]] = []
     step_times: list[float] = []
+    gravity_commands: list[NDArray[np.float64]] = []
     original_step = mujoco.mj_step
 
+    def gravity(model: mujoco.MjModel, q: NDArray[np.float64]) -> NDArray[np.float64]:
+        gravity_commands.append(q.copy())
+        return eval_gravity_torques(model, q)
+
     def step(model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        # No gravity evaluations occur during physics steps or settling.
+        assert len(gravity_commands) == len(data_instances) * len(trajectory["q"])
         step_times.append(float(data.time))
         step_velocities.append(data.qvel[velocity_indices].copy())
         original_step(model, data)
         step_accelerations.append(data.qacc[velocity_indices].copy())
 
     def launch(_model: mujoco.MjModel, data: mujoco.MjData) -> MagicMock:
+        assert len(gravity_commands) == (len(data_instances) + 1) * len(trajectory["q"])
         data_instances.append(data)
         initial_states.append(
             (data.time, data.qpos.copy(), data.qvel.copy(), data.ctrl.copy())
@@ -321,11 +330,15 @@ def test_trials_start_from_identical_fresh_states(
     monkeypatch.setattr("mujoco.viewer.launch_passive", launch)
     monkeypatch.setattr("time.sleep", lambda duration: None)
     monkeypatch.setattr(mujoco, "mj_step", step)
+    monkeypatch.setattr(simulation_helpers, "eval_gravity_torques", gravity)
     first = simulation_helpers.run_trial(
         model, trajectory, qi, Kp, Kd, 4 * model.opt.timestep, config=config
     )
     second = simulation_helpers.run_trial(
         model, trajectory, qi, Kp, Kd, 4 * model.opt.timestep, config=config
+    )
+    np.testing.assert_array_equal(
+        gravity_commands, np.vstack((trajectory["q"], trajectory["q"]))
     )
     assert data_instances[0] is not data_instances[1]
     unselected = np.setdiff1d(np.arange(model.nq), position_indices)
@@ -344,6 +357,7 @@ def test_trials_start_from_identical_fresh_states(
         "q",
         "torque_requested",
         "torque_feedback",
+        "torque_gravity_ff",
         "q_command",
         "dq_reference",
         "ddq_reference",
@@ -378,6 +392,22 @@ def test_trials_start_from_identical_fresh_states(
     np.testing.assert_allclose(
         first["torque_requested"][0],
         eval_gravity_torques(model, qi),
+        rtol=0,
+        atol=1e-14,
+    )
+    np.testing.assert_allclose(
+        first["torque_gravity_ff"],
+        np.vstack(
+            [eval_gravity_torques(model, command) for command in first["q_command"]]
+        ),
+        rtol=0,
+        atol=1e-14,
+    )
+    np.testing.assert_allclose(
+        first["torque_requested"],
+        Kp * (first["q_command"] - first["q"])
+        - Kd * first["dq_measured"]
+        + first["torque_gravity_ff"],
         rtol=0,
         atol=1e-14,
     )
@@ -466,6 +496,10 @@ def test_combined_csv_retains_both_trials(tmp_path: Path) -> None:
     # Different lengths model an interrupted second trial.
     recordings = {"unshaped": _recording(3), "shaped": _recording(2)}
     recordings["shaped"]["q_command"][:] = 0.9
+    for result in recordings.values():
+        result["torque_gravity_ff"] = np.arange(
+            len(result["t"]) * 7, dtype=np.float64
+        ).reshape(-1, 7)
     path = simulation_helpers.save_recordings_csv(recordings, tmp_path / "results.csv")
     with path.open(newline="") as stream:
         rows = list(csv.DictReader(stream))
@@ -482,6 +516,18 @@ def test_combined_csv_retains_both_trials(tmp_path: Path) -> None:
     assert float(rows[-1]["J7_ddq_reference_rad_s2"]) == pytest.approx(0.4)
     assert float(rows[-1]["J7_dq_measured_rad_s"]) == pytest.approx(0.005)
     assert float(rows[-1]["J7_ddq_measured_rad_s2"]) == pytest.approx(0.6)
+    assert list(rows[0])[-7:] == [
+        f"J{i}_torque_gravity_ff_Nm" for i in range(1, 8)
+    ]
+    for row, expected in zip(
+        rows,
+        np.vstack([result["torque_gravity_ff"] for result in recordings.values()]),
+        strict=True,
+    ):
+        np.testing.assert_array_equal(
+            [float(row[f"J{i}_torque_gravity_ff_Nm"]) for i in range(1, 8)],
+            expected,
+        )
 
 
 def test_save_experiment_unique_files_and_metadata(

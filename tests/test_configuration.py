@@ -29,7 +29,7 @@ def test_load_robot_config(tmp_path: Path) -> None:
         "acceleration_limits: [2, 4, 6, 8, 10, 12, 14]\n"
         "waypoints: [[0, 0, 0, 0, 0, 0, 0], [0.1, -0.2, 0, 0.3, 0, 0, 0]]\n"
         "simulation: {dt_s: 0.004, minimum_duration_s: 3, settling_time_s: 0.5}\n"
-        "simulation_assessment: {settling_window_s: 0.25, position_tolerance_rad: 0.01, velocity_tolerance_rad_s: 0.01}\n"
+        "simulation_assessment: {settling_window_s: 0.25, position_tolerance_rad: 0.01, velocity_tolerance_rad_s: 0.01, measured_velocity_tolerance_rad_s: 0.05, j4_lower_position_tolerance_rad: 0.05}\n"
         "input_shaping:\n"
         "  enabled: false\n"
         "  type: zvd\n"
@@ -60,7 +60,7 @@ def test_load_robot_config(tmp_path: Path) -> None:
         enabled=False, type="zvd", zvd=ZVDConfig(tau_min_s=0.2, utilization_min=0.4)
     )
     snapshot = robot_config_to_dict(config)
-    assert config.simulation_assessment == SimulationAssessmentConfig(0.25, 0.01, 0.01)
+    assert config.simulation_assessment == SimulationAssessmentConfig(0.25, 0.01, 0.01, 0.05, 0.05)
     assert yaml.safe_load(yaml.safe_dump(snapshot)) == yaml.safe_load(path.read_text())
     cast(list[list[float]], snapshot["waypoints"])[0][0] = 99.0
     cast(dict[str, float], snapshot["simulation"])["dt_s"] = 1.0
@@ -127,7 +127,8 @@ def test_fingerprint_is_deterministic_and_independent_of_yaml_format(tmp_path: P
 @pytest.mark.parametrize(
     "change", [
         "gain", "waypoint", "timestep", "shaping-enabled", "model-hash",
-        "model-revision", "settling-tolerance",
+         "model-revision", "settling-tolerance", "measured-velocity-tolerance",
+         "j4-lower-position-tolerance",
     ]
 )
 def test_fingerprint_changes_with_configuration_or_model_identity(change: str) -> None:
@@ -146,6 +147,10 @@ def test_fingerprint_changes_with_configuration_or_model_identity(change: str) -
         model_hash = "2" * 64
     elif change == "settling-tolerance":
         config.simulation_assessment.position_tolerance_rad *= 2
+    elif change == "measured-velocity-tolerance":
+        config.simulation_assessment.measured_velocity_tolerance_rad_s += 0.01
+    elif change == "j4-lower-position-tolerance":
+        config.simulation_assessment.j4_lower_position_tolerance_rad += 0.01
     else:
         model_revision = "b" * 40
     assert experiment_fingerprint(config, model_hash, model_revision) != original
@@ -158,6 +163,10 @@ def test_fingerprint_changes_with_configuration_or_model_identity(change: str) -
         ("position_tolerance_rad", -0.01), ("velocity_tolerance_rad_s", -0.01),
         ("position_tolerance_rad", float("nan")),
         ("velocity_tolerance_rad_s", float("inf")),
+        ("measured_velocity_tolerance_rad_s", -0.01),
+        ("measured_velocity_tolerance_rad_s", float("nan")),
+        ("j4_lower_position_tolerance_rad", -0.01),
+        ("j4_lower_position_tolerance_rad", float("inf")),
     ],
 )
 def test_invalid_assessment_settings(tmp_path: Path, key: str, value: float) -> None:

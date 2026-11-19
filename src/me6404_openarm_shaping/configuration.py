@@ -163,7 +163,11 @@ def load_robot_config(
     """
     with Path(path).open() as stream:
         config = cast(dict[str, object], yaml.safe_load(stream))
+    return parse_robot_config(config)
 
+
+def parse_robot_config(config: dict[str, object]) -> RobotConfig:
+    """Validate an in-memory configuration with the robot YAML schema."""
     arrays: dict[str, FloatVector] = {}
     for name in ("motor_kp", "motor_kd", "velocity_limits", "acceleration_limits"):
         values = np.asarray(cast(ArrayLike, config[name]), dtype=np.float64)

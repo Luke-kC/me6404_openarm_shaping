@@ -1,0 +1,144 @@
+# Extracted from trajectory_suite.yaml; waypoints and per-path metadata are unchanged.
+joint_order:
+- openarm_left_joint1
+- openarm_left_joint2
+- openarm_left_joint3
+- openarm_left_joint4
+- openarm_left_joint5
+- openarm_left_joint6
+- openarm_left_joint7
+trajectories:
+- id: medium-09
+  triplet_id: null
+  band: medium
+  candidate_number: 94
+  waypoints:
+  - [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  - [-1.034834, -1.521773, -0.701482, 1.627131, -0.089773, -0.575398, 0.09553]
+  - [0.528537, -1.855768, -0.398703, 0.21, 0.043395, -0.429131, 0.935294]
+  duration_s: 1.788
+  joint_space_travel_rad: 4.945719910763926
+  min_reference_clearance_by_joint_rad: [0.8677259999999998, 0.17453267320510335, 0.869314, 0.0, 1.481023, 0.21000000000000008, 0.6355020000000001]
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies: [openarm_left_right_finger, openarm_left_left_finger]
+      geoms: [openarm_left_right_finger_collision, openarm_left_left_finger_collision]
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 1.506
+      minimum_separation_m: -0.003522265987081866
+      sample_count: 895
+  modal_samples: 895
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9998912401210494
+  minimum_assignment_score_gap: 0.7883876712203439
+  beta: 0.715618366393296
+  beta_decay_eligible_modes: 0.715618366393296
+  fixed_zvd_component_count: 2
+  fixed_zvd_nominal_frequencies_hz: [2.2555411226690705, 3.0017228741706816]
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.9397653654954006
+    f_max_hz: 2.201840478802154
+    beta: 0.1347285441419615
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1321866357150165
+    f_max_hz: 3.6581442658136876
+    beta: 0.715618366393296
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: wide-02
+  triplet_id: null
+  band: wide
+  candidate_number: 206
+  waypoints:
+  - [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  - [-1.277914, -0.734612, -1.360796, 2.019373, -0.758611, -0.575398, -0.168337]
+  - [1.171412, -2.707822, -0.642116, 0.267584, 0.237352, -0.432009, 0.974402]
+  duration_s: 2.12
+  joint_space_travel_rad: 6.980669608265855
+  min_reference_clearance_by_joint_rad: [0.2248509999999999, 0.17453267320510335, 0.2100000000000002, 0.0, 0.812185, 0.21000000000000008, 0.5963940000000001]
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies: [openarm_left_right_finger, openarm_left_left_finger]
+      geoms: [openarm_left_right_finger_collision, openarm_left_left_finger_collision]
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 1.736
+      minimum_separation_m: -0.0035222659870818417
+      sample_count: 1061
+  modal_samples: 1061
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9999394802987541
+  minimum_assignment_score_gap: 0.8608150710061677
+  beta: 0.9090858350718403
+  beta_decay_eligible_modes: 0.9090858350718403
+  fixed_zvd_component_count: 4
+  fixed_zvd_nominal_frequencies_hz: [2.09624919707565, 2.780146159025121, 3.687018841662273, 5.606814353891588]
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.8027743094850588
+    f_max_hz: 2.8568716994877974
+    beta: 0.5418942872789387
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.078082107979867
+    f_max_hz: 4.016582475758427
+    beta: 0.9090858350718403
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: wide-07
+  triplet_id: null
+  band: wide
+  candidate_number: 44
+  waypoints:
+  - [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  - [0.638348, -2.487847, -1.280695, 0.21, 0.397228, 0.122155, 1.244187]
+  duration_s: 1.122
+  joint_space_travel_rad: 3.1625723337998135
+  min_reference_clearance_by_joint_rad: [0.7579149999999998, 0.17453267320510335, 0.29010100000000016, 0.0, 1.173568, 0.663243, 0.32660900000000015]
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies: [openarm_left_right_finger, openarm_left_left_finger]
+      geoms: [openarm_left_right_finger_collision, openarm_left_left_finger_collision]
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 1.006
+      minimum_separation_m: -0.0035222659870818287
+      sample_count: 562
+  modal_samples: 562
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9991260377265776
+  minimum_assignment_score_gap: 0.7986632146649211
+  beta: 1.514283999733491
+  beta_decay_eligible_modes: 1.514283999733491
+  fixed_zvd_component_count: 4
+  fixed_zvd_nominal_frequencies_hz: [2.03019129116083, 2.699694784727365, 3.5903486461821146, 4.771567635689038]
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.7459645103983137
+    f_max_hz: 2.078534486773115
+    beta: 0.1709688042368915
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1276712227517005
+    f_max_hz: 5.356673344616891
+    beta: 1.514283999733491
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0

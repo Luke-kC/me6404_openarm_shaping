@@ -1,0 +1,28 @@
+# Paths are relative to this file. The robot config supplies gains, limits,
+# simulation and assessment settings, but not waypoints or input shaping.
+robot_config: robot_config.yaml
+trajectory_suite: trajectory_suite.yaml
+output_dir: ../sim_out
+
+# Independent of robot_config.yaml. Baseline always runs.
+input_shaping:
+  time_invariant:
+    zv:
+      enabled: false
+      tau_min_s: 0.1
+      utilization_min: 0.3
+    zvd:
+      enabled: true
+      tau_min_s: 0.1
+      utilization_min: 0.3
+    ei:
+      enabled: false # not implemented
+  time_varying:
+    zv:
+      enabled: true
+      tau_min_s: 0.0 # all stable oscillatory modes
+    zvd:
+      enabled: true
+      tau_min_s: 0.0
+    ei:
+      enabled: false # not implemented

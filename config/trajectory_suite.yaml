@@ -1,0 +1,2283 @@
+scope: Sampled unshaped reference only; not dynamic simulation or hardware clearance.
+seed: 6404
+model_revision: a8c979629f2591ad035d99d338ce114969e6cddc
+model_xml_sha256: 3863212abcf4e69ceb0743fc67f33c6efdb3a2db9b659bb333f2fee4a0f19539
+robot_config_sha256: b6ca3745038c92c970cc61a71c42923aecf08572e74c56b83e20dd30552980dd
+batch_config_sha256: 1b174341e2d52d4a1dff213e0dd903af1e3f5f0433263d7ae56bdad213c3ebc8
+mujoco_version: 4.0.1
+numpy_version: 2.5.4
+joint_order:
+- openarm_left_joint1
+- openarm_left_joint2
+- openarm_left_joint3
+- openarm_left_joint4
+- openarm_left_joint5
+- openarm_left_joint6
+- openarm_left_joint7
+dt_s: 0.002
+initial_modal_stride: 1
+full_resolution_modal_rechecks: 0
+motor_kp:
+- 70.0
+- 70.0
+- 70.0
+- 60.0
+- 10.0
+- 10.0
+- 10.0
+motor_kd:
+- 0.55
+- 0.5
+- 0.4
+- 0.4
+- 0.14
+- 0.12
+- 0.1
+velocity_limits_rad_s:
+- 4.0
+- 4.0
+- 4.0
+- 4.0
+- 4.0
+- 4.0
+- 4.0
+acceleration_limits_rad_s2:
+- 8.0
+- 8.0
+- 8.0
+- 8.0
+- 8.0
+- 8.0
+- 8.0
+inset_rad: 0.2
+initial_inset_exception: Until each initially out-of-inset joint first enters.
+contact_policy: Existing MuJoCo collision filters; penetrating pairs involving the left arm disallowed
+  except the existing closed left gripper exception.
+beta_definition: Maximum relative natural-frequency span of the two lowest-frequency oscillatory modes
+  at the initial pose, tracked by mode shape.
+bands:
+  narrow: beta < 0.40
+  medium: 0.40 <= beta < 0.75
+  wide: beta >= 0.75
+  multimode_untracked: Stable path with incomplete mode tracking; ranked separately.
+fixed_zvd_screen:
+  tau_min_s: 0.1
+  utilization_min: 0.3
+  frequency_tolerance: 0.14
+  minimum_components_medium_and_wide: 2
+  minimum_components_untracked: 4
+minimum_allowed_mode_match_mac: 0.8
+minimum_allowed_assignment_score_gap: 0.02
+band_selection: Observed beta endpoints and nearest distinct interior targets.
+maximum_trajectories_per_band: 10
+candidate_count: 257
+configured_path_candidate_number: 0
+candidate_outcomes:
+  medium: 40
+  narrow: 139
+  wide: 75
+  disallowed_contact: 2
+  tracking_failed_too_few_fixed_zvd_components: 1
+selected_band_counts:
+  narrow: 10
+  medium: 10
+  wide: 10
+untracked_benchmark_count: 0
+runnable_untracked_benchmark_count: 0
+trajectories:
+- id: narrow-01
+  triplet_id: null
+  band: narrow
+  candidate_number: 61
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.91555
+    - -0.060127
+    - -0.169172
+    - 0.256048
+    - -0.150054
+    - -0.089066
+    - -0.561341
+  duration_s: 0.678
+  joint_space_travel_rad: 1.1320686710928802
+  min_reference_clearance_by_joint_rad:
+  - 0.48071299999999983
+  - 0.17453267320510335
+  - 1.401624
+  - 0.0
+  - 1.4207420000000002
+  - 0.6963320000000001
+  - 1.009455
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.552
+      minimum_separation_m: -0.0035222659870816964
+      sample_count: 340
+  modal_samples: 340
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9999965394388903
+  minimum_assignment_score_gap: 0.9286646681453476
+  beta: 0.0052839886435328805
+  beta_decay_eligible_modes: 0.0052839886435328805
+  fixed_zvd_component_count: 0
+  fixed_zvd_nominal_frequencies_hz: []
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.945145625468804
+    f_max_hz: 1.9546393025693967
+    beta: 0.004880544658277435
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1210949279584295
+    f_max_hz: 2.1323623061681194
+    beta: 0.0052839886435328805
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: narrow-02
+  triplet_id: null
+  band: narrow
+  candidate_number: 25
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -0.983278
+    - -0.088372
+    - 0.054678
+    - 0.267757
+    - 0.225839
+    - -0.010821
+    - 0.239021
+  - - 0.747438
+    - -0.088372
+    - 0.054678
+    - 0.267757
+    - 0.225839
+    - -0.010821
+    - 0.239021
+  duration_s: 1.6340000000000001
+  joint_space_travel_rad: 2.806624972359651
+  min_reference_clearance_by_joint_rad:
+  - 0.6488249999999998
+  - 0.17453267320510335
+  - 1.516118
+  - 0.0
+  - 1.344957
+  - 0.7745770000000001
+  - 1.3317750000000002
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.15
+      minimum_separation_m: -0.003522265987081704
+      sample_count: 818
+  modal_samples: 818
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9999988085907945
+  minimum_assignment_score_gap: 0.9371096437518553
+  beta: 0.04795803922371994
+  beta_decay_eligible_modes: 0.04795803922371994
+  fixed_zvd_component_count: 1
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.1767213045965983
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.8719803219530744
+    f_max_hz: 1.9652687089357377
+    beta: 0.04795803922371994
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.0787075901005267
+    f_max_hz: 2.147154022421407
+    beta: 0.03209887556298032
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: narrow-03
+  triplet_id: null
+  band: narrow
+  candidate_number: 178
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -1.011486
+    - -0.357051
+    - 0.0535
+    - 0.524307
+    - -0.122243
+    - -0.129605
+    - -1.254955
+  duration_s: 0.794
+  joint_space_travel_rad: 1.7421257945811492
+  min_reference_clearance_by_joint_rad:
+  - 1.3962629999999998
+  - 0.17453267320510335
+  - 1.517296
+  - 0.0
+  - 1.448553
+  - 0.6557930000000001
+  - 0.31584100000000004
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.68
+      minimum_separation_m: -0.003522265987081726
+      sample_count: 398
+  modal_samples: 398
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9999821712513192
+  minimum_assignment_score_gap: 0.9241828841283188
+  beta: 0.08984220032751918
+  beta_decay_eligible_modes: 0.08984220032751918
+  fixed_zvd_component_count: 1
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.2618703837841805
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.945208530054395
+    f_max_hz: 2.0427356566765287
+    beta: 0.05013710618439781
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.132360916990997
+    f_max_hz: 2.323937038472604
+    beta: 0.08984220032751918
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: narrow-04
+  triplet_id: null
+  band: narrow
+  candidate_number: 200
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -2.600863
+    - -0.378492
+    - 0.268298
+    - 1.06566
+    - -0.16265
+    - -0.288109
+    - 0.630564
+  - - -2.731247
+    - -0.474031
+    - -0.797886
+    - 0.599459
+    - -0.047563
+    - 0.193696
+    - 1.031531
+  duration_s: 1.8840000000000001
+  joint_space_travel_rad: 4.272951256526318
+  min_reference_clearance_by_joint_rad:
+  - 0.7594119999999998
+  - 0.17453267320510335
+  - 0.7729100000000001
+  - 0.0
+  - 1.4081460000000001
+  - 0.49728900000000004
+  - 0.5392650000000001
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 1.862
+      minimum_separation_m: -0.003522265987082024
+      sample_count: 943
+  modal_samples: 943
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9999829292278485
+  minimum_assignment_score_gap: 0.937171212822056
+  beta: 0.1225701659021768
+  beta_decay_eligible_modes: 0.1225701659021768
+  fixed_zvd_component_count: 1
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.048556153601256
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.7617582920970802
+    f_max_hz: 1.945208717654321
+    beta: 0.09430887368775354
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.0352162076263554
+    f_max_hz: 2.29658020925693
+    beta: 0.1225701659021768
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: narrow-05
+  triplet_id: null
+  band: narrow
+  candidate_number: 162
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -2.331589
+    - -0.888859
+    - -0.145229
+    - 0.390133
+    - -1.158498
+    - 0.572515
+    - -0.427305
+  duration_s: 1.084
+  joint_space_travel_rad: 2.8726561595822773
+  min_reference_clearance_by_joint_rad:
+  - 1.1590699999999998
+  - 0.17453267320510335
+  - 1.425567
+  - 0.0
+  - 0.41229800000000005
+  - 0.21288300000000004
+  - 1.143491
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.89
+      minimum_separation_m: -0.0035222659870817927
+      sample_count: 543
+  modal_samples: 543
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9999510886243889
+  minimum_assignment_score_gap: 0.9210547918366325
+  beta: 0.23880062333668098
+  beta_decay_eligible_modes: 0.23880062333668098
+  fixed_zvd_component_count: 1
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.17075389570702
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.866848350308037
+    f_max_hz: 1.955154824892968
+    beta: 0.04539691926112494
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.115546181725763
+    f_max_hz: 2.6247556296183525
+    beta: 0.23880062333668098
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: narrow-06
+  triplet_id: null
+  band: narrow
+  candidate_number: 248
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.731079
+    - -0.306185
+    - 0.910904
+    - 1.386654
+    - -0.253869
+    - -0.516934
+    - 0.766891
+  - - 1.115031
+    - -0.035467
+    - 0.452734
+    - 1.369049
+    - -0.766807
+    - -0.575398
+    - -0.172071
+  duration_s: 1.52
+  joint_space_travel_rad: 3.3304088299623653
+  min_reference_clearance_by_joint_rad:
+  - 0.2812319999999997
+  - 0.17453267320510335
+  - 0.659892
+  - 0.0
+  - 0.8039890000000001
+  - 0.21000000000000008
+  - 0.8039050000000001
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 1.482
+      minimum_separation_m: -0.003522265987081718
+      sample_count: 761
+  modal_samples: 761
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9999759812790668
+  minimum_assignment_score_gap: 0.9037495338719961
+  beta: 0.24906894214517275
+  beta_decay_eligible_modes: 0.24906894214517275
+  fixed_zvd_component_count: 1
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.2618163314119806
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.9451620450143035
+    f_max_hz: 2.4042149295949815
+    beta: 0.2359916057780403
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1322035085446793
+    f_max_hz: 2.6633087324122138
+    beta: 0.24906894214517275
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: narrow-07
+  triplet_id: null
+  band: narrow
+  candidate_number: 216
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -3.090288
+    - -0.655859
+    - -0.07406
+    - 1.39305
+    - -1.132619
+    - 0.267278
+    - 0.730595
+  - - -3.280659
+    - -0.035467
+    - 0.563206
+    - 1.199243
+    - -1.360796
+    - -0.417143
+    - 1.209873
+  duration_s: 1.86
+  joint_space_travel_rad: 4.987564130454036
+  min_reference_clearance_by_joint_rad:
+  - 0.20999999999999996
+  - 0.17453267320510335
+  - 1.00759
+  - 0.0
+  - 0.2100000000000002
+  - 0.36825500000000005
+  - 0.3609230000000001
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 1.742
+      minimum_separation_m: -0.003522265987081915
+      sample_count: 931
+  modal_samples: 931
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9998889009550569
+  minimum_assignment_score_gap: 0.9291468145705974
+  beta: 0.26206092397583003
+  beta_decay_eligible_modes: 0.26206092397583003
+  fixed_zvd_component_count: 2
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.1027909844099315
+  - 2.7888053871726872
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.808400246592541
+    f_max_hz: 2.083167138142813
+    beta: 0.14125318047139584
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1194174652566784
+    f_max_hz: 2.6782263014623275
+    beta: 0.26206092397583003
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: narrow-08
+  triplet_id: null
+  band: narrow
+  candidate_number: 112
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -1.170147
+    - -0.645546
+    - -0.064294
+    - 0.8476
+    - 0.263716
+    - -0.23631
+    - -1.17572
+  - - -1.823873
+    - -0.760427
+    - -0.02391
+    - 0.415906
+    - -0.097151
+    - -0.575398
+    - -1.360796
+  duration_s: 1.34
+  joint_space_travel_rad: 2.9569484859404747
+  min_reference_clearance_by_joint_rad:
+  - 1.3962629999999998
+  - 0.17453267320510335
+  - 1.506502
+  - 0.0
+  - 1.30708
+  - 0.21000000000000008
+  - 0.2100000000000002
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.752
+      minimum_separation_m: -0.003522265987081776
+      sample_count: 671
+  modal_samples: 671
+  tracking_failure: null
+  minimum_mode_match_mac: 0.999948288701868
+  minimum_assignment_score_gap: 0.8787298966516479
+  beta: 0.28734403103546363
+  beta_decay_eligible_modes: 0.28734403103546363
+  fixed_zvd_component_count: 1
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.2618703837841805
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.945208530054395
+    f_max_hz: 2.0496482815453168
+    beta: 0.05369077395933543
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1323406032015746
+    f_max_hz: 2.7450621838839995
+    beta: 0.28734403103546363
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: narrow-09
+  triplet_id: null
+  band: narrow
+  candidate_number: 202
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -2.164063
+    - -0.70874
+    - -0.539681
+    - 0.97835
+    - 0.657625
+    - -0.392545
+    - -0.182296
+  duration_s: 1.042
+  joint_space_travel_rad: 2.655880157141131
+  min_reference_clearance_by_joint_rad:
+  - 1.3265959999999999
+  - 0.17453267320510335
+  - 1.0311150000000002
+  - 0.0
+  - 0.9131710000000001
+  - 0.39285300000000006
+  - 1.3885
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.8280000000000001
+      minimum_separation_m: -0.003522265987081783
+      sample_count: 522
+  modal_samples: 522
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9999734898306406
+  minimum_assignment_score_gap: 0.8968092254348998
+  beta: 0.36696741998921395
+  beta_decay_eligible_modes: 0.36696741998921395
+  fixed_zvd_component_count: 2
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.0922166383075242
+  - 2.7740875373018894
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.799306308944471
+    f_max_hz: 1.9452456639025746
+    beta: 0.07502504369237092
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.130600582164109
+    f_max_hz: 2.9131080761408743
+    beta: 0.36696741998921395
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: narrow-10
+  triplet_id: null
+  band: narrow
+  candidate_number: 66
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.596191
+    - -1.005331
+    - -0.305597
+    - 0.364076
+    - -0.607863
+    - -0.245754
+    - 0.836501
+  duration_s: 0.71
+  joint_space_travel_rad: 1.6497579721016655
+  min_reference_clearance_by_joint_rad:
+  - 0.8000719999999998
+  - 0.17453267320510335
+  - 1.265199
+  - 0.0
+  - 0.962933
+  - 0.539644
+  - 0.734295
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.514
+      minimum_separation_m: -0.00352226598708176
+      sample_count: 356
+  modal_samples: 356
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9987719433110518
+  minimum_assignment_score_gap: 0.8716740332242161
+  beta: 0.39121025951923183
+  beta_decay_eligible_modes: 0.39121025951923183
+  fixed_zvd_component_count: 2
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.2618703837841805
+  - 2.999778686831635
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.945208530054395
+    f_max_hz: 2.0973765250068412
+    beta: 0.07822708599174762
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1274616080557025
+    f_max_hz: 2.96166361924076
+    beta: 0.39121025951923183
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: medium-01
+  triplet_id: null
+  band: medium
+  candidate_number: 192
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 1.004061
+    - -1.140986
+    - 0.996411
+    - 1.555608
+    - 0.107312
+    - -0.24873
+    - 0.697045
+  - - 0.926684
+    - -0.245665
+    - 1.360796
+    - 1.934635
+    - 0.011094
+    - 0.575398
+    - 1.360796
+  duration_s: 1.552
+  joint_space_travel_rad: 3.9940177290917918
+  min_reference_clearance_by_joint_rad:
+  - 0.3922019999999997
+  - 0.17453267320510335
+  - 0.2100000000000002
+  - 0.0
+  - 1.463484
+  - 0.21000000000000008
+  - 0.2100000000000002
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.994
+      minimum_separation_m: -0.0035222659870817437
+      sample_count: 777
+  modal_samples: 777
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9863708501302114
+  minimum_assignment_score_gap: 0.9371711952161539
+  beta: 0.46442940590068676
+  beta_decay_eligible_modes: 0.46442940590068676
+  fixed_zvd_component_count: 3
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.2618703837841805
+  - 2.9994519643607895
+  - 6.4103956923294
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.945208530054395
+    f_max_hz: 2.848620572020506
+    beta: 0.46442940590068676
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1322728404453173
+    f_max_hz: 2.935987192787571
+    beta: 0.3769126616135596
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: medium-02
+  triplet_id: null
+  band: medium
+  candidate_number: 170
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -2.755689
+    - -1.270873
+    - -0.145814
+    - 0.302452
+    - 0.790112
+    - -0.263791
+    - -0.265983
+  duration_s: 1.19
+  joint_space_travel_rad: 3.175891780628553
+  min_reference_clearance_by_joint_rad:
+  - 0.7349700000000001
+  - 0.17453267320510335
+  - 1.424982
+  - 0.0
+  - 0.780684
+  - 0.521607
+  - 1.304813
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.71
+      minimum_separation_m: -0.003522265987081767
+      sample_count: 596
+  modal_samples: 596
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9999068061409561
+  minimum_assignment_score_gap: 0.860447176999267
+  beta: 0.48951199273382656
+  beta_decay_eligible_modes: 0.48951199273382656
+  fixed_zvd_component_count: 2
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.1593554289361694
+  - 2.8648289922629866
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.8570456688851056
+    f_max_hz: 1.9635947516095067
+    beta: 0.05477514676610102
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1062059338697416
+    f_max_hz: 3.1500228555925958
+    beta: 0.48951199273382656
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: medium-03
+  triplet_id: null
+  band: medium
+  candidate_number: 106
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -1.078691
+    - -1.062676
+    - 0.03047
+    - 1.151803
+    - -1.305767
+    - 0.54301
+    - 0.020638
+  duration_s: 0.81
+  joint_space_travel_rad: 2.3708113319281647
+  min_reference_clearance_by_joint_rad:
+  - 1.3962629999999998
+  - 0.17453267320510335
+  - 1.540326
+  - 0.0
+  - 0.2650290000000002
+  - 0.24238800000000005
+  - 1.5501580000000001
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.59
+      minimum_separation_m: -0.0035222659870818083
+      sample_count: 406
+  modal_samples: 406
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9998852917357497
+  minimum_assignment_score_gap: 0.924735367841756
+  beta: 0.5079080649354958
+  beta_decay_eligible_modes: 0.5079080649354958
+  fixed_zvd_component_count: 2
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.2618703837841805
+  - 3.0035104046269283
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.945208530054395
+    f_max_hz: 2.027923106226894
+    beta: 0.04252221543064372
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1323623061681194
+    f_max_hz: 3.21540631883536
+    beta: 0.5079080649354958
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: medium-04
+  triplet_id: null
+  band: medium
+  candidate_number: 232
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -1.304761
+    - -1.133686
+    - 0.174913
+    - 1.385634
+    - 1.259158
+    - 0.4163
+    - 0.178649
+  - - -0.975431
+    - -0.709643
+    - 0.495793
+    - 0.395021
+    - 1.360796
+    - -0.478111
+    - 0.641058
+  duration_s: 1.538
+  joint_space_travel_rad: 4.142135382374207
+  min_reference_clearance_by_joint_rad:
+  - 1.3962629999999998
+  - 0.17453267320510335
+  - 1.0750030000000002
+  - 0.0
+  - 0.2100000000000002
+  - 0.30728700000000003
+  - 0.9297380000000001
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 1.204
+      minimum_separation_m: -0.0035222659870818504
+      sample_count: 770
+  modal_samples: 770
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9998519186049047
+  minimum_assignment_score_gap: 0.825909451503136
+  beta: 0.5575579309233759
+  beta_decay_eligible_modes: 0.5575579309233759
+  fixed_zvd_component_count: 2
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.2618703837841805
+  - 2.999112969969481
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.945208530054395
+    f_max_hz: 2.1212894119892676
+    beta: 0.09052031142900069
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1323623061681194
+    f_max_hz: 3.3212778215742143
+    beta: 0.5575579309233759
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: medium-05
+  triplet_id: null
+  band: medium
+  candidate_number: 74
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -1.964562
+    - -0.941014
+    - -0.389871
+    - 1.050384
+    - -0.377154
+    - 0.142869
+    - 1.192693
+  duration_s: 0.992
+  joint_space_travel_rad: 2.7541769055859504
+  min_reference_clearance_by_joint_rad:
+  - 1.3962629999999998
+  - 0.17453267320510335
+  - 1.180925
+  - 0.0
+  - 1.193642
+  - 0.642529
+  - 0.3781030000000001
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.614
+      minimum_separation_m: -0.0035222659870818027
+      sample_count: 497
+  modal_samples: 497
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9999538555057392
+  minimum_assignment_score_gap: 0.9369280846337813
+  beta: 0.5896880637291326
+  beta_decay_eligible_modes: 0.5896880637291326
+  fixed_zvd_component_count: 2
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.2077825413153764
+  - 2.929843400594886
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.8986929855312238
+    f_max_hz: 1.9620178183859798
+    beta: 0.03255426442787869
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1317803079398976
+    f_max_hz: 3.3892089074331637
+    beta: 0.5896880637291326
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: medium-06
+  triplet_id: null
+  band: medium
+  candidate_number: 10
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -3.117693
+    - -1.177225
+    - 0.804986
+    - 2.178237
+    - 0.90491
+    - 0.296836
+    - 0.548614
+  duration_s: 1.28
+  joint_space_travel_rad: 4.207913767085895
+  min_reference_clearance_by_joint_rad:
+  - 0.3729659999999999
+  - 0.17453267320510335
+  - 0.7658100000000001
+  - 0.0
+  - 0.6658860000000001
+  - 0.48856200000000005
+  - 1.022182
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.96
+      minimum_separation_m: -0.003522265987081917
+      sample_count: 641
+  modal_samples: 641
+  tracking_failure: null
+  minimum_mode_match_mac: 0.999951379977376
+  minimum_assignment_score_gap: 0.8962031243706243
+  beta: 0.5901925578139653
+  beta_decay_eligible_modes: 0.5901925578139653
+  fixed_zvd_component_count: 3
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.2618703837841805
+  - 3.003514397626225
+  - 5.829882920510996
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.945208530054395
+    f_max_hz: 3.093256127888742
+    beta: 0.5901925578139653
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.132362296312416
+    f_max_hz: 3.329713046129393
+    beta: 0.5615137476185418
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: medium-07
+  triplet_id: null
+  band: medium
+  candidate_number: 222
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -1.224945
+    - -1.562261
+    - -0.565731
+    - 2.150154
+    - 0.086437
+    - -0.575398
+    - 0.264247
+  - - 0.515346
+    - -1.820573
+    - -0.488854
+    - 0.401488
+    - -0.074477
+    - -0.151954
+    - 0.586993
+  duration_s: 1.974
+  joint_space_travel_rad: 5.591713815018361
+  min_reference_clearance_by_joint_rad:
+  - 0.8809169999999998
+  - 0.17453267320510335
+  - 1.005065
+  - 0.0
+  - 1.484359
+  - 0.21000000000000008
+  - 0.9838030000000001
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 1.9180000000000001
+      minimum_separation_m: -0.0035222659870818526
+      sample_count: 988
+  modal_samples: 988
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9999059133393907
+  minimum_assignment_score_gap: 0.8645668383555829
+  beta: 0.6634382533584182
+  beta_decay_eligible_modes: 0.6634382533584182
+  fixed_zvd_component_count: 2
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.2239051224963147
+  - 2.9501682008027132
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.9125584053468307
+    f_max_hz: 2.8271247611384096
+    beta: 0.47016365683220823
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.132256049792796
+    f_max_hz: 3.5469467737243017
+    beta: 0.6634382533584182
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: medium-08
+  triplet_id: null
+  band: medium
+  candidate_number: 212
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -1.410899
+    - -1.378934
+    - -0.821056
+    - 2.182185
+    - -0.390961
+    - -0.575398
+    - -0.080664
+  duration_s: 1.046
+  joint_space_travel_rad: 3.1334644304250525
+  min_reference_clearance_by_joint_rad:
+  - 1.3962629999999998
+  - 0.17453267320510335
+  - 0.7497400000000001
+  - 0.0
+  - 1.1798350000000002
+  - 0.21000000000000008
+  - 1.490132
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.682
+      minimum_separation_m: -0.0035222659870817307
+      sample_count: 524
+  modal_samples: 524
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9998976910791888
+  minimum_assignment_score_gap: 0.871720149752311
+  beta: 0.6886319670951369
+  beta_decay_eligible_modes: 0.6886319670951369
+  fixed_zvd_component_count: 3
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.2618703837841805
+  - 3.000766062446925
+  - 5.9727884515124945
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.945208530054395
+    f_max_hz: 3.1314116611484386
+    beta: 0.6098076955589296
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1322765012723326
+    f_max_hz: 3.6006893507284072
+    beta: 0.6886319670951369
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: medium-09
+  triplet_id: null
+  band: medium
+  candidate_number: 94
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -1.034834
+    - -1.521773
+    - -0.701482
+    - 1.627131
+    - -0.089773
+    - -0.575398
+    - 0.09553
+  - - 0.528537
+    - -1.855768
+    - -0.398703
+    - 0.21
+    - 0.043395
+    - -0.429131
+    - 0.935294
+  duration_s: 1.788
+  joint_space_travel_rad: 4.945719910763926
+  min_reference_clearance_by_joint_rad:
+  - 0.8677259999999998
+  - 0.17453267320510335
+  - 0.869314
+  - 0.0
+  - 1.481023
+  - 0.21000000000000008
+  - 0.6355020000000001
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 1.506
+      minimum_separation_m: -0.003522265987081866
+      sample_count: 895
+  modal_samples: 895
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9998912401210494
+  minimum_assignment_score_gap: 0.7883876712203439
+  beta: 0.715618366393296
+  beta_decay_eligible_modes: 0.715618366393296
+  fixed_zvd_component_count: 2
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.2555411226690705
+  - 3.0017228741706816
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.9397653654954006
+    f_max_hz: 2.201840478802154
+    beta: 0.1347285441419615
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1321866357150165
+    f_max_hz: 3.6581442658136876
+    beta: 0.715618366393296
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: medium-10
+  triplet_id: null
+  band: medium
+  candidate_number: 172
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -0.843397
+    - -1.558429
+    - -1.243965
+    - 2.233461
+    - -0.622516
+    - 0.221887
+    - -0.003069
+  duration_s: 1.06
+  joint_space_travel_rad: 3.1800292195484623
+  min_reference_clearance_by_joint_rad:
+  - 1.3962629999999998
+  - 0.17453267320510335
+  - 0.3268310000000001
+  - 0.0
+  - 0.9482800000000001
+  - 0.5635110000000001
+  - 1.567727
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.518
+      minimum_separation_m: -0.003522265987081748
+      sample_count: 531
+  modal_samples: 531
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9998086001476336
+  minimum_assignment_score_gap: 0.892885352629839
+  beta: 0.7474051564459149
+  beta_decay_eligible_modes: 0.7474051564459149
+  fixed_zvd_component_count: 3
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.2618703837841805
+  - 3.001565774951838
+  - 5.4795468767120745
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.945208530054395
+    f_max_hz: 2.914409028068526
+    beta: 0.49825017885718853
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1323619116702277
+    f_max_hz: 3.726100494711183
+    beta: 0.7474051564459149
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: wide-01
+  triplet_id: null
+  band: wide
+  candidate_number: 158
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -1.370001
+    - -0.881431
+    - -0.877851
+    - 2.222663
+    - -0.186232
+    - -0.491005
+    - 0.555078
+  - - 0.714499
+    - -2.60949
+    - -0.644197
+    - 0.21
+    - 0.476062
+    - -0.316168
+    - 0.996235
+  duration_s: 2.078
+  joint_space_travel_rad: 6.469999053470271
+  min_reference_clearance_by_joint_rad:
+  - 0.6817639999999998
+  - 0.17453267320510335
+  - 0.692945
+  - 0.0
+  - 1.094734
+  - 0.294393
+  - 0.5745610000000001
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 1.8
+      minimum_separation_m: -0.003522265987081946
+      sample_count: 1040
+  modal_samples: 1040
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9999502260553639
+  minimum_assignment_score_gap: 0.7739824669158526
+  beta: 0.7556630639931716
+  beta_decay_eligible_modes: 0.7556630639931716
+  fixed_zvd_component_count: 4
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.038589270230316
+  - 2.7031321940566873
+  - 3.587385971735678
+  - 6.33750857340555
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.7531867723980716
+    f_max_hz: 2.9730713495264705
+    beta: 0.6271227779852921
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.08460664049597
+    f_max_hz: 3.6959540743185166
+    beta: 0.7556630639931716
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: wide-02
+  triplet_id: null
+  band: wide
+  candidate_number: 206
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -1.277914
+    - -0.734612
+    - -1.360796
+    - 2.019373
+    - -0.758611
+    - -0.575398
+    - -0.168337
+  - - 1.171412
+    - -2.707822
+    - -0.642116
+    - 0.267584
+    - 0.237352
+    - -0.432009
+    - 0.974402
+  duration_s: 2.12
+  joint_space_travel_rad: 6.980669608265855
+  min_reference_clearance_by_joint_rad:
+  - 0.2248509999999999
+  - 0.17453267320510335
+  - 0.2100000000000002
+  - 0.0
+  - 0.812185
+  - 0.21000000000000008
+  - 0.5963940000000001
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 1.736
+      minimum_separation_m: -0.0035222659870818417
+      sample_count: 1061
+  modal_samples: 1061
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9999394802987541
+  minimum_assignment_score_gap: 0.8608150710061677
+  beta: 0.9090858350718403
+  beta_decay_eligible_modes: 0.9090858350718403
+  fixed_zvd_component_count: 4
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.09624919707565
+  - 2.780146159025121
+  - 3.687018841662273
+  - 5.606814353891588
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.8027743094850588
+    f_max_hz: 2.8568716994877974
+    beta: 0.5418942872789387
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.078082107979867
+    f_max_hz: 4.016582475758427
+    beta: 0.9090858350718403
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: wide-03
+  triplet_id: null
+  band: wide
+  candidate_number: 140
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.621256
+    - -2.190464
+    - -0.720436
+    - 0.505051
+    - 0.28962
+    - 0.501716
+    - 1.360796
+  duration_s: 1.048
+  joint_space_travel_rad: 2.8540428409890763
+  min_reference_clearance_by_joint_rad:
+  - 0.7750069999999998
+  - 0.17453267320510335
+  - 0.8503600000000001
+  - 0.0
+  - 1.281176
+  - 0.283682
+  - 0.2100000000000002
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.744
+      minimum_separation_m: -0.003522265987081834
+      sample_count: 525
+  modal_samples: 525
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9988009922263538
+  minimum_assignment_score_gap: 0.8505161758635673
+  beta: 1.0756406863630528
+  beta_decay_eligible_modes: 1.0756406863630528
+  fixed_zvd_component_count: 3
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.2046120763940005
+  - 2.935986189382101
+  - 3.8977124712599895
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.8959663856988405
+    f_max_hz: 2.094767569615646
+    beta: 0.10220044835565581
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1299817119887616
+    f_max_hz: 4.42363736657014
+    beta: 1.0756406863630528
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: wide-04
+  triplet_id: null
+  band: wide
+  candidate_number: 240
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -1.679706
+    - -1.88794
+    - -0.334804
+    - 1.138467
+    - 0.519812
+    - 0.063419
+    - 0.911493
+  - - -2.032494
+    - -1.654852
+    - 0.73722
+    - 0.240732
+    - 1.360796
+    - -0.517131
+    - 0.490211
+  duration_s: 1.706
+  joint_space_travel_rad: 4.814978734803528
+  min_reference_clearance_by_joint_rad:
+  - 1.3962629999999998
+  - 0.17453267320510335
+  - 0.8335760000000001
+  - 0.0
+  - 0.2100000000000002
+  - 0.26826700000000003
+  - 0.6593030000000001
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 1.51
+      minimum_separation_m: -0.0035222659870818252
+      sample_count: 854
+  modal_samples: 854
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9997581110060486
+  minimum_assignment_score_gap: 0.9070160032859251
+  beta: 1.2331075001061904
+  beta_decay_eligible_modes: 1.2331075001061904
+  fixed_zvd_component_count: 3
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.1618756229473273
+  - 2.875554332269171
+  - 3.8131090845864715
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.8592130357347014
+    f_max_hz: 2.030141448795769
+    beta: 0.08787151116198723
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.131531471220581
+    f_max_hz: 4.760963423900222
+    beta: 1.2331075001061904
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: wide-05
+  triplet_id: null
+  band: wide
+  candidate_number: 24
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.098003
+    - -2.001981
+    - 1.251899
+    - 0.919293
+    - -0.621255
+    - 0.34106
+    - 0.016033
+  - - 0.537682
+    - -2.064232
+    - 1.287645
+    - 1.16666
+    - -0.38858
+    - -0.091791
+    - -0.761333
+  duration_s: 1.6260000000000001
+  joint_space_travel_rad: 3.6843558595648873
+  min_reference_clearance_by_joint_rad:
+  - 0.8585809999999998
+  - 0.17453267320510335
+  - 0.28315100000000015
+  - 0.0
+  - 0.9495410000000001
+  - 0.44433800000000007
+  - 0.809463
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.966
+      minimum_separation_m: -0.0035222659870818252
+      sample_count: 814
+  modal_samples: 814
+  tracking_failure: null
+  minimum_mode_match_mac: 0.997489866395168
+  minimum_assignment_score_gap: 0.8745539666072732
+  beta: 1.3246392494925245
+  beta_decay_eligible_modes: 1.3246392494925245
+  fixed_zvd_component_count: 3
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.2618703837841805
+  - 3.0039594599302695
+  - 3.989407037995411
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.945208530054395
+    f_max_hz: 2.226935198107564
+    beta: 0.14483108813289575
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.125841269720644
+    f_max_hz: 4.950452074609331
+    beta: 1.3246392494925245
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: wide-06
+  triplet_id: null
+  band: wide
+  candidate_number: 34
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -0.301645
+    - -2.090862
+    - 1.247111
+    - 0.696382
+    - 0.858369
+    - -0.388578
+    - -0.61383
+  duration_s: 1.024
+  joint_space_travel_rad: 2.7870243659607645
+  min_reference_clearance_by_joint_rad:
+  - 1.3962629999999998
+  - 0.17453267320510335
+  - 0.323685
+  - 0.0
+  - 0.712427
+  - 0.39682000000000006
+  - 0.9569660000000001
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.326
+      minimum_separation_m: -0.003522265987081729
+      sample_count: 513
+  modal_samples: 513
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9974913927386242
+  minimum_assignment_score_gap: 0.8581477317287103
+  beta: 1.4816461900483349
+  beta_decay_eligible_modes: 1.4816461900483349
+  fixed_zvd_component_count: 4
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.20711265955254
+  - 2.935659671809877
+  - 3.8943265577200963
+  - 5.163267371626294
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.8981168872151843
+    f_max_hz: 2.094314180666169
+    beta: 0.10086183070845273
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1220184897359045
+    f_max_hz: 5.28142497647258
+    beta: 1.4816461900483349
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: wide-07
+  triplet_id: null
+  band: wide
+  candidate_number: 44
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.638348
+    - -2.487847
+    - -1.280695
+    - 0.21
+    - 0.397228
+    - 0.122155
+    - 1.244187
+  duration_s: 1.122
+  joint_space_travel_rad: 3.1625723337998135
+  min_reference_clearance_by_joint_rad:
+  - 0.7579149999999998
+  - 0.17453267320510335
+  - 0.29010100000000016
+  - 0.0
+  - 1.173568
+  - 0.663243
+  - 0.32660900000000015
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 1.006
+      minimum_separation_m: -0.0035222659870818287
+      sample_count: 562
+  modal_samples: 562
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9991260377265776
+  minimum_assignment_score_gap: 0.7986632146649211
+  beta: 1.514283999733491
+  beta_decay_eligible_modes: 1.514283999733491
+  fixed_zvd_component_count: 4
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.03019129116083
+  - 2.699694784727365
+  - 3.5903486461821146
+  - 4.771567635689038
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.7459645103983137
+    f_max_hz: 2.078534486773115
+    beta: 0.1709688042368915
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1276712227517005
+    f_max_hz: 5.356673344616891
+    beta: 1.514283999733491
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+- id: wide-08
+  triplet_id: null
+  band: wide
+  candidate_number: 208
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -0.632873
+    - -1.307542
+    - -1.094567
+    - 0.511886
+    - -0.549804
+    - 0.263667
+    - 1.046419
+  - - 0.057564
+    - -0.784234
+    - -1.360796
+    - 0.389958
+    - -0.634563
+    - 0.311915
+    - 1.144704
+  duration_s: 1.3980000000000001
+  joint_space_travel_rad: 3.1692641647829536
+  min_reference_clearance_by_joint_rad:
+  - 1.3386989999999999
+  - 0.17453267320510335
+  - 0.2100000000000002
+  - 0.0
+  - 0.9362330000000001
+  - 0.47348300000000004
+  - 0.42609200000000014
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 0.846
+      minimum_separation_m: -0.0035222659870817793
+      sample_count: 700
+  modal_samples: 700
+  tracking_failure: null
+  minimum_mode_match_mac: 0.9998157991095032
+  minimum_assignment_score_gap: 0.8879930354164856
+  beta: 2.0028748186737237
+  beta_decay_eligible_modes: 2.0028748186737237
+  fixed_zvd_component_count: 4
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.211957997736144
+  - 2.9370150290984256
+  - 3.8957565235214635
+  - 5.169376274023721
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.9022838780530835
+    f_max_hz: 2.0214841323610386
+    beta: 0.06127890787350282
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.1322583996626574
+    f_max_hz: 6.403113166975812
+    beta: 2.0028748186737237
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 0.73
+- id: wide-09
+  triplet_id: null
+  band: wide
+  candidate_number: 184
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -0.559426
+    - -1.865114
+    - 1.230977
+    - 0.281769
+    - 0.395269
+    - 0.477864
+    - 0.641135
+  - - -0.975799
+    - -1.495031
+    - 0.243987
+    - 0.631445
+    - 0.444031
+    - 0.479493
+    - 0.922804
+  duration_s: 1.67
+  joint_space_travel_rad: 3.706381034902349
+  min_reference_clearance_by_joint_rad:
+  - 1.3962629999999998
+  - 0.17453267320510335
+  - 0.3398190000000001
+  - 0.0
+  - 1.126765
+  - 0.30590500000000004
+  - 0.6479920000000001
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 1.124
+      minimum_separation_m: -0.003522265987081834
+      sample_count: 836
+  modal_samples: 836
+  tracking_failure: null
+  minimum_mode_match_mac: 0.999229082635101
+  minimum_assignment_score_gap: 0.7606793159851006
+  beta: 2.091777339557318
+  beta_decay_eligible_modes: 2.091777339557318
+  fixed_zvd_component_count: 4
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.077567571939409
+  - 2.7603221306644103
+  - 3.6734694986267584
+  - 4.87580500410346
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.7867081118678916
+    f_max_hz: 2.0735586010525937
+    beta: 0.1474651610625421
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.128495535015957
+    f_max_hz: 6.5889226867846125
+    beta: 2.091777339557318
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 0.5861244019138756
+- id: wide-10
+  triplet_id: null
+  band: wide
+  candidate_number: 166
+  waypoints:
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - -2.061209
+    - -1.071251
+    - -0.804894
+    - 1.728186
+    - -1.091178
+    - -0.575398
+    - 0.307178
+  - - 0.606363
+    - -1.728185
+    - -1.15782
+    - 0.251761
+    - -0.063496
+    - -0.455842
+    - 1.24377
+  duration_s: 2.184
+  joint_space_travel_rad: 6.697979014458859
+  min_reference_clearance_by_joint_rad:
+  - 0.7898999999999998
+  - 0.17453267320510335
+  - 0.412976
+  - 0.0
+  - 0.4796180000000001
+  - 0.21000000000000008
+  - 0.32702600000000004
+  contact_screen:
+    disallowed_penetrating_pairs: 0
+    informational_contacts:
+    - kind: penetrating_contact
+      bodies:
+      - openarm_left_right_finger
+      - openarm_left_left_finger
+      geoms:
+      - openarm_left_right_finger_collision
+      - openarm_left_left_finger_collision
+      first_time_s: 0.0
+      first_separation_m: -0.003522261472918314
+      worst_time_s: 2.176
+      minimum_separation_m: -0.0035222659870818495
+      sample_count: 1093
+  modal_samples: 1093
+  tracking_failure: null
+  minimum_mode_match_mac: 0.999958371840222
+  minimum_assignment_score_gap: 0.5008217755347575
+  beta: 2.151565823943289
+  beta_decay_eligible_modes: 2.151565823943289
+  fixed_zvd_component_count: 4
+  fixed_zvd_nominal_frequencies_hz:
+  - 2.172184160717863
+  - 2.8865355099794017
+  - 3.826380928678873
+  - 5.083432014433758
+  modes:
+  - mode_id: 1
+    f_initial_hz: 1.945208530054395
+    f_min_hz: 1.8680783782173622
+    f_max_hz: 2.4346400014213843
+    beta: 0.2912600960001851
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 1.0
+  - mode_id: 2
+    f_initial_hz: 2.1323623061681194
+    f_min_hz: 2.132134912808739
+    f_max_hz: 6.720052775024961
+    beta: 2.151565823943289
+    decay_eligible_at_start: true
+    decay_eligible_sample_fraction: 0.8060384263494969
+ranked_untracked_benchmarks: []

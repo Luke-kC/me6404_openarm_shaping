@@ -1,4 +1,5 @@
 import argparse
+from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from me6404_openarm_shaping.configuration import (
+    RobotConfig,
     experiment_fingerprint,
     load_robot_config,
 )
@@ -30,6 +32,7 @@ from me6404_openarm_shaping.input_shaping import (
 from me6404_openarm_shaping.robot_model import (
     MODEL_PATH,
     MODEL_REVISION,
+    ModalWorkspace,
     check_joint_configuration,
     load_model,
     modal_properties,
@@ -52,35 +55,19 @@ from me6404_openarm_shaping.tvist import (
 )
 
 
-def main() -> None:
-    parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        description="Simulate and plot the left-arm trajectory."
-    )
-    parser.add_argument(
-        "--save-csv",
-        action="store_true",
-        help="save results and metadata in a new uniquely named folder in sim_out/",
-    )
-    parser.add_argument(
-        "--headless",
-        action="store_true",
-        help="skip the MuJoCo viewer and real-time pacing; show plots at the end",
-    )
-    args: argparse.Namespace = parser.parse_args()
-    provenance: RunProvenance | None = (
-        capture_run_provenance() if args.save_csv else None
-    )
+@dataclass
+class SimulationResult:
+    trajectories: dict[str, JointTrajectory]
+    recordings: dict[str, TrialRecording]
+    shaper_designs: dict[str, ShaperDesign]
+    duration_s: float
+    tvist_schedules: dict[str, list[ModalProperties]]
 
-    model: mujoco.MjModel = load_model()
-    config = load_robot_config()
-    model_sha256 = (
-        provenance["model_sha256"]
-        if provenance is not None
-        else sha256(MODEL_PATH.read_bytes()).hexdigest()
-    )
-    configuration_sha256 = experiment_fingerprint(config, model_sha256, MODEL_REVISION)
-    print(f"\nExperiment configuration: {configuration_sha256}\n")
 
+def simulate(
+    model: mujoco.MjModel, config: RobotConfig, *, headless: bool
+) -> SimulationResult:
+    """Run the baseline and enabled shapers for a single waypoint path."""
     Kp = config.motor_kp
     Kd = config.motor_kd
 
@@ -126,8 +113,10 @@ def main() -> None:
     tvist_schedules: dict[str, list[ModalProperties]] = {}
     properties: list[ModalProperties] = []
     if any(settings.enabled for _, settings, _, _ in fixed_shapers) or tvist_shapers:
+        workspace = ModalWorkspace(model)
         properties = [
-            modal_properties(model, configuration, Kp, Kd) for configuration in q
+            modal_properties(model, configuration, Kp, Kd, workspace=workspace)
+            for configuration in q
         ]
 
     for kind, settings, tolerance, design in fixed_shapers:
@@ -217,7 +206,7 @@ def main() -> None:
             Kd,
             simulation_time,
             config=config,
-            headless=args.headless,
+            headless=headless,
         )
         recordings[label] = result
         print_simulation_checks(label, result["simulation_checks"])
@@ -227,29 +216,67 @@ def main() -> None:
             )
             break
 
+    return SimulationResult(
+        trajectories,
+        recordings,
+        shaper_designs,
+        simulation_time,
+        {
+            label: schedule
+            for label, schedule in tvist_schedules.items()
+            if label in recordings
+        },
+    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Simulate and plot the left-arm trajectory."
+    )
+    parser.add_argument(
+        "--save-csv",
+        action="store_true",
+        help="save results and metadata in a new uniquely named folder in sim_out/",
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="skip the MuJoCo viewer and real-time pacing; show plots at the end",
+    )
+    args = parser.parse_args()
+    provenance: RunProvenance | None = (
+        capture_run_provenance() if args.save_csv else None
+    )
+    model = load_model()
+    config = load_robot_config()
+    model_sha256 = (
+        provenance["model_sha256"]
+        if provenance is not None
+        else sha256(MODEL_PATH.read_bytes()).hexdigest()
+    )
+    configuration_sha256 = experiment_fingerprint(config, model_sha256, MODEL_REVISION)
+    print(f"\nExperiment configuration: {configuration_sha256}\n")
+    result = simulate(model, config, headless=args.headless)
+
     if provenance is not None and any(
-        len(result["t"]) for result in recordings.values()
+        len(trial["t"]) for trial in result.recordings.values()
     ):
         output_dir: Path = Path(__file__).resolve().parents[2] / "sim_out"
         run_dir: Path = save_experiment(
-            recordings,
+            result.recordings,
             config,
-            shaper_designs,
-            simulation_time,
+            result.shaper_designs,
+            result.duration_s,
             output_dir,
             provenance=provenance,
             configuration_fingerprint=configuration_sha256,
-            tvist_schedules={
-                label: schedule
-                for label, schedule in tvist_schedules.items()
-                if label in recordings
-            },
+            tvist_schedules=result.tvist_schedules,
         )
         print("\nSaved simulation results and metadata:")
         print(run_dir)
         print()
 
-    plot_comparison(trajectories, recordings)
+    plot_comparison(result.trajectories, result.recordings)
     plt.show()
 
 

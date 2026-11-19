@@ -225,6 +225,7 @@ def test_whole_trajectory_shaper_design(
     model = MagicMock()
     model.opt.timestep = 0.01
     monkeypatch.setattr(robot_sim, "load_model", lambda: model)
+    monkeypatch.setattr(robot_sim, "ModalWorkspace", MagicMock())
     config = RobotConfig(
         motor_kp=np.ones(7),
         motor_kd=np.ones(7),
@@ -480,9 +481,14 @@ def test_trials_start_from_identical_fresh_states(
     gravity_commands: list[NDArray[np.float64]] = []
     original_step = mujoco.mj_step
 
-    def gravity(model: mujoco.MjModel, q: NDArray[np.float64]) -> NDArray[np.float64]:
+    def gravity(
+        model: mujoco.MjModel,
+        q: NDArray[np.float64],
+        *,
+        workspace: simulation_helpers.ModalWorkspace,
+    ) -> NDArray[np.float64]:
         gravity_commands.append(q.copy())
-        return eval_gravity_torques(model, q)
+        return eval_gravity_torques(model, q, workspace=workspace)
 
     def step(model: mujoco.MjModel, data: mujoco.MjData) -> None:
         # No gravity evaluations occur during physics steps or settling.

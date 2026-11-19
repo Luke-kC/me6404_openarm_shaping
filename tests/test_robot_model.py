@@ -9,6 +9,7 @@ from me6404_openarm_shaping.configuration import load_robot_config
 from me6404_openarm_shaping.robot_model import (
     FINGER_JOINT_NAMES,
     LEFT_ARM_JOINT_NAMES,
+    ModalWorkspace,
     eval_gravity_torques,
     gravitational_stiffness,
     load_model,
@@ -18,6 +19,18 @@ from me6404_openarm_shaping.robot_model import (
     resolve_joint_indices,
     state_matrix,
 )
+
+
+def test_reused_modal_workspace_matches_fresh_state_matrices() -> None:
+    model = load_model()
+    config = load_robot_config()
+    workspace = ModalWorkspace(model)
+    for q in (*config.waypoints, *reversed(config.waypoints)):
+        fresh = state_matrix(model, q, config.motor_kp, config.motor_kd)
+        reused = state_matrix(
+            model, q, config.motor_kp, config.motor_kd, workspace=workspace
+        )
+        np.testing.assert_array_equal(reused, fresh)
 
 
 @pytest.fixture(scope="module")
@@ -164,20 +177,24 @@ def test_modal_properties() -> None:
     selected = poles[poles.imag > 1e-10]
     selected = selected[np.argsort(np.abs(selected))]
 
+    np.testing.assert_allclose(result["eigenvalues"], selected, rtol=1e-10, atol=1e-10)
     np.testing.assert_allclose(
-        result["eigenvalues"], selected, rtol=1e-10, atol=1e-10
+        result["natural_frequency_hz"],
+        np.abs(selected) / (2 * np.pi),
+        rtol=1e-10,
+        atol=1e-12,
     )
     np.testing.assert_allclose(
-        result["natural_frequency_hz"], np.abs(selected) / (2 * np.pi),
-        rtol=1e-10, atol=1e-12,
+        result["damped_frequency_hz"],
+        selected.imag / (2 * np.pi),
+        rtol=1e-10,
+        atol=1e-12,
     )
     np.testing.assert_allclose(
-        result["damped_frequency_hz"], selected.imag / (2 * np.pi),
-        rtol=1e-10, atol=1e-12,
-    )
-    np.testing.assert_allclose(
-        result["damping_ratio"], -selected.real / np.abs(selected),
-        rtol=1e-10, atol=1e-12,
+        result["damping_ratio"],
+        -selected.real / np.abs(selected),
+        rtol=1e-10,
+        atol=1e-12,
     )
     real_poles = np.sort(poles.real[np.abs(poles.imag) <= 1e-10])
     np.testing.assert_allclose(

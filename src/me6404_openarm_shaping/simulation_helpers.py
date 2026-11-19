@@ -39,6 +39,7 @@ from me6404_openarm_shaping.robot_model import (
     LEFT_ARM_JOINT_NAMES,
     MODEL_PATH,
     MODEL_REVISION,
+    ModalWorkspace,
     eval_gravity_torques,
     resolve_joint_indices,
 )
@@ -103,9 +104,12 @@ def run_trial(
     step_count = int(np.ceil(simulation_time / model.opt.timestep))
 
     # Feedforward depends only on the known commanded pose, not measured state.
+    gravity_workspace = ModalWorkspace(model)
     trajectory_gravity = np.empty_like(trajectory["q"])
     for index, q_command in enumerate(trajectory["q"]):
-        trajectory_gravity[index] = eval_gravity_torques(model, q_command)
+        trajectory_gravity[index] = eval_gravity_torques(
+            model, q_command, workspace=gravity_workspace
+        )
 
     viewer_context = (
         nullcontext() if headless else mujoco.viewer.launch_passive(model, data)
@@ -324,6 +328,7 @@ def save_experiment(
     provenance: RunProvenance,
     configuration_fingerprint: str,
     tvist_schedules: dict[str, list[ModalProperties]] | None = None,
+    directory_name: str | None = None,
 ) -> Path:
     """Save paired result/metadata files in an atomically unique run directory.
 
@@ -334,7 +339,12 @@ def save_experiment(
     saved_at = datetime.now(UTC)
     local_saved_at = saved_at.astimezone(ZoneInfo("America/New_York"))
     prefix = f"run_{local_saved_at.strftime('%Y%m%d_%H%M%S_%f')}_"
-    run_dir = Path(mkdtemp(prefix=prefix, dir=output_dir))
+    if directory_name is None:
+        run_dir = Path(mkdtemp(prefix=prefix, dir=output_dir))
+    else:
+        # Batch callers supply a trajectory ID inside an already unique batch.
+        run_dir = output_dir / directory_name
+        run_dir.mkdir()
     run_id = run_dir.name
     results_path = run_dir / f"{run_id}_results.csv"
     metadata_path = run_dir / f"{run_id}_metadata.yaml"

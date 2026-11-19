@@ -51,9 +51,9 @@ Only after explicit approval is given can hardware be commanded.
 | --- | --- | --- |
 | **Nov 5–11** | **M0–M2:** proposal, hardware feasibility, closed-loop dynamics derivation | **Complete.** Repeatable configuration-dependent joint response observed; 14-state linear model derived. |
 | **Nov 10–16** | **M3:** Python/MuJoCo modal analysis | **In progress.** Inertia, gravity, linearization, and multi-configuration eigenmode calculations implemented; full-trajectory frequency report in progress. |
-| **Nov 17–23** | **M4 - M5:** compare predicted vs. measured modes; design trajectory-specific fixed shaper, validate in simulation, and test on hardware| Project update **Nov 23** with findings. |
+| **Nov 17–23** | **M4 - M5:** compare predicted vs. measured modes; design trajectory-specific fixed shaper, validate in simulation, and test on hardware | Project update **Nov 23** with findings. |
 | **Nov 24–Dec 1** | **M5:** Design configuration-scheduled shaper, validate in simulation, and test on hardware | Should be mostly done after this. |
-| **Dec 2–9** | ; final analysis, presentation, report | **M6** integration if time permits|
+| **Dec 2–9** | ; final analysis, presentation, report | **M6** integration if time permits |
 
 ## Software
 
@@ -105,6 +105,26 @@ uv run --frozen --no-sync python -m me6404_openarm_shaping.robot_sim
 
 ---
 
+### Batch simulation
+
+```bash
+uv run --frozen --no-sync python -m me6404_openarm_shaping.batch_sim --headless --save-csv
+```
+
+Edit `config/batch_sim.yaml` to select the suite and enable shapers for the batch,
+or pass `--config path/to/batch.yaml`. Its `input_shaping` block is independent of
+`robot_config.yaml`; only gains, motion limits, simulation timing, and assessment
+settings are shared. The baseline always runs. Omit `--headless` to use the
+MuJoCo viewer. Batch runs do not open plots.
+
+With `--save-csv`, each batch saves a `summary.csv` (one row per trial, with
+relative links to its CSV and metadata) and a folder per trajectory under
+`sim_out/batch_*/`. Without it, the simulation prints checks but writes no files.
+The `band` and `beta` columns come from the input suite; they are not
+recomputed if you change the robot settings.
+
+---
+
 ### Record a physical CSV trial
 
 With ROS Jazzy and the built workspace already sourced, and bringup already
@@ -127,8 +147,7 @@ metadata. The MCAP storage plugin must already be installed.
 
 Accepted trajectory payloads are copied to
 `/me6404/commanded_trajectory`, a transient-local **diagnostic topic, not a
-hardware command input**. 
-
+hardware command input**.
 
 **Ctrl-C or recorder failure does not cancel motion or disable motors.**
 Use the established robot stop/E-stop procedure when needed. The wrapper
@@ -137,6 +156,7 @@ attempts to finalize the bag on exit; inspect partial recordings after failures.
 ---
 
 ## M0 - Project Proposal
+
 **Objective**: Create a project proposal to present with.
 
 **Status:** Complete
@@ -144,6 +164,7 @@ attempts to finalize the bag on exit; inspect partial recordings after failures.
 ---
 
 ## M1 - Test vibrations on the physical OpenArm
+
 **Objective**: Determine if there is a real and measurable vibration that makes this project viable. Determine which measurement best captures it.
 
 **Status:** Complete
@@ -151,7 +172,8 @@ attempts to finalize the bag on exit; inspect partial recordings after failures.
 ---
 
 ## M2 - Derive closed-loop system model
-**Objective:** Derive the closed-loop system model for the OpenArm and the low-level MIT motor controllers. 
+
+**Objective:** Derive the closed-loop system model for the OpenArm and the low-level MIT motor controllers.
 
 **Status:** Complete
 
@@ -168,7 +190,6 @@ M(q) q_ddot + C(q, q_dot) q_dot + g(q) = tau
 | C(q, q_dot) q_dot | Coriolis & centrifugal torques | 7x1 |
 | g(q) | Gravitational torques | 7x1 |
 | tau | Applied joint torques | 7x1 |
-
 
 ---
 
@@ -199,6 +220,7 @@ Giving the following:
 ```
 g(q0) + Kp (q0 - qd) = tau_ff
 ```
+
 Where `tau_ff = g(qd)` to make `qd` an equilibrium
 
 ---
@@ -288,7 +310,7 @@ natural_freq_hz = omega_n / (2 * np.pi)
 
 ## M5 — Input shaping: design → simulation gate → hardware experiment
 
-**Objective:** Reduce measured residual vibration through shaped position-command references while preserving the existing joint feedback controller. 
+**Objective:** Reduce measured residual vibration through shaped position-command references while preserving the existing joint feedback controller.
 
 **Status:** Not started
 

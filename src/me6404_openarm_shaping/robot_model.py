@@ -69,16 +69,29 @@ def nominal_configuration(model: mujoco.MjModel) -> FloatVector:
     return np.array(model.qpos0, dtype=np.float64, copy=True)
 
 
-def mass_matrix(model: mujoco.MjModel, q: ArrayLike) -> FloatMatrix:
+class ModalWorkspace:
+    """Private scratch data for repeated frozen-pose calculations on one model."""
+
+    def __init__(self, model: mujoco.MjModel) -> None:
+        self.model = model
+        self.data = mujoco.MjData(model)
+        self.position_indices, self.velocity_indices = resolve_joint_indices(model)
+
+
+def mass_matrix(
+    model: mujoco.MjModel, q: ArrayLike, *, workspace: ModalWorkspace | None = None
+) -> FloatMatrix:
     """
     Calculates the mass inertia matrix, M(q), at joint configuration q.
     For one 7-DoF OpenArm, this result is 7x7
     """
-    position_indices, velocity_indices = resolve_joint_indices(model)
-
-    data = mujoco.MjData(model)
-
-    data.qpos[:] = nominal_configuration(model)
+    scratch = workspace if workspace is not None else ModalWorkspace(model)
+    position_indices, velocity_indices = (
+        scratch.position_indices,
+        scratch.velocity_indices,
+    )
+    data = scratch.data
+    data.qpos[:] = model.qpos0
     data.qpos[position_indices] = q
 
     mujoco.mj_forward(model, data)
@@ -89,17 +102,21 @@ def mass_matrix(model: mujoco.MjModel, q: ArrayLike) -> FloatMatrix:
     return M[np.ix_(velocity_indices, velocity_indices)]
 
 
-def eval_gravity_torques(model: mujoco.MjModel, q: ArrayLike) -> FloatVector:
+def eval_gravity_torques(
+    model: mujoco.MjModel, q: ArrayLike, *, workspace: ModalWorkspace | None = None
+) -> FloatVector:
     """
     Calculates the constant gravity torques, g(q), at joint configuration q.
     For one 7-DoF OpenArm, this result is 7x1
     """
 
-    position_indices, velocity_indices = resolve_joint_indices(model)
-
-    data = mujoco.MjData(model)
-
-    data.qpos[:] = nominal_configuration(model)
+    scratch = workspace if workspace is not None else ModalWorkspace(model)
+    position_indices, velocity_indices = (
+        scratch.position_indices,
+        scratch.velocity_indices,
+    )
+    data = scratch.data
+    data.qpos[:] = model.qpos0
     data.qpos[position_indices] = q
 
     data.qvel[: model.nv] = 0.0
@@ -113,7 +130,11 @@ def eval_gravity_torques(model: mujoco.MjModel, q: ArrayLike) -> FloatVector:
 
 
 def gravitational_stiffness(
-    model: mujoco.MjModel, q: ArrayLike, epsilon: float = 0.001
+    model: mujoco.MjModel,
+    q: ArrayLike,
+    epsilon: float = 0.001,
+    *,
+    workspace: ModalWorkspace | None = None,
 ) -> FloatMatrix:
     """
     Calculates the gravitational stiffness matrix, Kg(q), at joint configuraion q.
@@ -121,7 +142,11 @@ def gravitational_stiffness(
     For one 7-DoF OpenArm, this result is 7x7
     epsilon is the central-difference step in radians.
     """
-    position_indices, _ = resolve_joint_indices(model)
+    position_indices = (
+        workspace.position_indices
+        if workspace is not None
+        else resolve_joint_indices(model)[0]
+    )
 
     n = len(position_indices)
     Kg = np.zeros((n, n))
@@ -133,8 +158,8 @@ def gravitational_stiffness(
         q_plus[i] += epsilon
         q_minus[i] -= epsilon
 
-        g_plus = np.asarray(eval_gravity_torques(model, q_plus))
-        g_minus = np.asarray(eval_gravity_torques(model, q_minus))
+        g_plus = eval_gravity_torques(model, q_plus, workspace=workspace)
+        g_minus = eval_gravity_torques(model, q_minus, workspace=workspace)
 
         Kg[:, i] = (g_plus - g_minus) / (2 * epsilon)
 
@@ -146,17 +171,25 @@ def state_matrix(
     q: ArrayLike,
     motor_kp: ArrayLike,
     motor_kd: ArrayLike,
+    *,
+    workspace: ModalWorkspace | None = None,
 ) -> FloatMatrix:
-    position_indices, _ = resolve_joint_indices(model)
+    if workspace is not None and workspace.model is not model:
+        raise ValueError("Modal workspace must belong to the supplied model.")
+    position_indices = (
+        workspace.position_indices
+        if workspace is not None
+        else resolve_joint_indices(model)[0]
+    )
 
     n = len(position_indices)
 
     A1 = np.zeros((n, n))
     A2 = np.identity(n)
 
-    M = mass_matrix(model, q)
+    M = mass_matrix(model, q, workspace=workspace)
 
-    Kg = gravitational_stiffness(model, q)
+    Kg = gravitational_stiffness(model, q, workspace=workspace)
 
     Keff = np.diag(motor_kp) + Kg
 
@@ -178,6 +211,8 @@ def modal_properties(
     motor_kp: ArrayLike,
     motor_kd: ArrayLike,
     tol: float = 1e-10,
+    *,
+    workspace: ModalWorkspace | None = None,
 ) -> ModalProperties:
     """Return frozen-q, zero-velocity properties of the closed-loop state matrix.
 
@@ -189,7 +224,9 @@ def modal_properties(
     """
     check_joint_configuration(model, q)
 
-    poles = np.linalg.eigvals(state_matrix(model, q, motor_kp, motor_kd))
+    poles = np.linalg.eigvals(
+        state_matrix(model, q, motor_kp, motor_kd, workspace=workspace)
+    )
 
     oscillatory = poles[np.imag(poles) > tol]
 

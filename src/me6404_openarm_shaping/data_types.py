@@ -3,6 +3,7 @@ from typing import Literal, NotRequired, TypedDict
 import numpy as np
 
 type FloatVector = np.ndarray[tuple[int], np.dtype[np.float64]]
+type IntVector = np.ndarray[tuple[int], np.dtype[np.int32]]
 type FloatMatrix = np.ndarray[tuple[int, int], np.dtype[np.float64]]
 type ComplexVector = np.ndarray[tuple[int], np.dtype[np.complex128]]
 
@@ -40,8 +41,12 @@ class ContactEvent(TypedDict):
 class LimitViolation(TypedDict):
     source: NotRequired[Literal["reference", "measured"]]
     kind: Literal[
-        "position_limit", "torque_clipping", "velocity_limit", "acceleration_limit",
-        "settling_position_error", "settling_velocity",
+        "position_limit",
+        "torque_clipping",
+        "velocity_limit",
+        "acceleration_limit",
+        "settling_position_error",
+        "settling_velocity",
     ]
     joint: str
     first_time_s: float
@@ -57,9 +62,12 @@ class LimitViolation(TypedDict):
 class NonfiniteViolation(TypedDict):
     source: NotRequired[Literal["reference", "measured"]]
     kind: Literal[
-        "nonfinite_position_limit", "nonfinite_torque_clipping",
-        "nonfinite_velocity_limit", "nonfinite_acceleration_limit",
-        "nonfinite_settling_position_error", "nonfinite_settling_velocity",
+        "nonfinite_position_limit",
+        "nonfinite_torque_clipping",
+        "nonfinite_velocity_limit",
+        "nonfinite_acceleration_limit",
+        "nonfinite_settling_position_error",
+        "nonfinite_settling_velocity",
     ]
     joint: str
     first_time_s: float
@@ -156,7 +164,8 @@ class RunProvenance(TypedDict):
 
 
 class ShaperDesign(TypedDict):
-    type: Literal["zvd"]
+    type: Literal["zv", "zvd"]
+    frequency_tolerance: float
     natural_frequencies_hz: list[float]
     damping_ratios: list[float]
     band_utilization: list[float]

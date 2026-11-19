@@ -1,5 +1,6 @@
 """Small checks for the shared YAML configuration."""
 
+import warnings
 from pathlib import Path
 from typing import cast
 
@@ -9,11 +10,10 @@ import yaml
 
 from me6404_openarm_shaping.configuration import (
     DEFAULT_CONFIG_PATH,
-    InputShapingConfig,
+    FixedShaperConfig,
     RobotConfig,
     SimulationAssessmentConfig,
     SimulationConfig,
-    ZVDConfig,
     experiment_fingerprint,
     load_robot_config,
     robot_config_to_dict,
@@ -31,11 +31,20 @@ def test_load_robot_config(tmp_path: Path) -> None:
         "simulation: {dt_s: 0.004, minimum_duration_s: 3, settling_time_s: 0.5}\n"
         "simulation_assessment: {settling_window_s: 0.25, position_tolerance_rad: 0.01, velocity_tolerance_rad_s: 0.01, measured_velocity_tolerance_rad_s: 0.05, j4_lower_position_tolerance_rad: 0.05}\n"
         "input_shaping:\n"
-        "  enabled: false\n"
-        "  type: zvd\n"
-        "  zvd: {tau_min_s: 0.2, utilization_min: 0.4}\n"
+        "  time_invariant:\n"
+        "    zv: {enabled: true, tau_min_s: 0.1, utilization_min: 0.3}\n"
+        "    zvd: {enabled: false, tau_min_s: 0.2, utilization_min: 0.4}\n"
+        "    ei: {enabled: false}\n"
+        "  time_varying:\n"
+        "    zv: {enabled: true, tau_min_s: 0}\n"
+        "    zvd: {enabled: false, tau_min_s: 0.15}\n"
+        "    ei: {enabled: false}\n"
     )
-    config = load_robot_config(path)
+    with pytest.warns(
+        UserWarning, match=r"time_varying\.zvd\.tau_min_s.*commanded acceleration spikes"
+    ) as caught:
+        config = load_robot_config(path)
+    assert len(caught) == 1
     assert isinstance(config, RobotConfig)
     kp, kd = config.motor_kp, config.motor_kd
     for values in (kp, kd, config.velocity_limits, config.acceleration_limits, config.waypoints):
@@ -56,9 +65,14 @@ def test_load_robot_config(tmp_path: Path) -> None:
     assert config.simulation == SimulationConfig(
         dt_s=0.004, minimum_duration_s=3.0, settling_time_s=0.5
     )
-    assert config.input_shaping == InputShapingConfig(
-        enabled=False, type="zvd", zvd=ZVDConfig(tau_min_s=0.2, utilization_min=0.4)
+    assert config.input_shaping.time_invariant.zv == FixedShaperConfig(True, 0.1, 0.3)
+    assert config.input_shaping.time_invariant.zvd == FixedShaperConfig(
+        enabled=False, tau_min_s=0.2, utilization_min=0.4
     )
+    assert config.input_shaping.time_varying.zv.enabled
+    assert not config.input_shaping.time_varying.zvd.enabled
+    assert config.input_shaping.time_varying.zv.tau_min_s == 0.0
+    assert config.input_shaping.time_varying.zvd.tau_min_s == 0.15
     snapshot = robot_config_to_dict(config)
     assert config.simulation_assessment == SimulationAssessmentConfig(0.25, 0.01, 0.01, 0.05, 0.05)
     assert yaml.safe_load(yaml.safe_dump(snapshot)) == yaml.safe_load(path.read_text())
@@ -66,6 +80,19 @@ def test_load_robot_config(tmp_path: Path) -> None:
     cast(dict[str, float], snapshot["simulation"])["dt_s"] = 1.0
     assert config.waypoints[0, 0] == 0.0
     assert config.simulation.dt_s == 0.004
+
+
+def test_omitted_tvist_cutoff_defaults_to_zero_without_warning(tmp_path: Path) -> None:
+    config = yaml.safe_load(DEFAULT_CONFIG_PATH.read_text())
+    varying = config["input_shaping"]["time_varying"]
+    for kind in ("zv", "zvd"):
+        varying[kind].pop("tau_min_s", None)
+    path = tmp_path / "robot.yaml"
+    path.write_text(yaml.safe_dump(config))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        settings = load_robot_config(path).input_shaping.time_varying
+    assert settings.zv.tau_min_s == settings.zvd.tau_min_s == 0.0
 
 
 def test_reject_incorrect_gain_count(tmp_path: Path) -> None:
@@ -100,11 +127,21 @@ def test_reject_invalid_experiment_settings(tmp_path: Path, case: str) -> None:
         config["waypoints"] = [[0] * 6, [0] * 6]
         match = "waypoints"
     else:
-        config["input_shaping"]["type"] = "other"
-        match = "zvd"
+        config["input_shaping"]["time_invariant"]["other"] = {"enabled": True}
+        match = "Unknown input_shaping"
     path = tmp_path / "robot.yaml"
     path.write_text(yaml.safe_dump(config))
     with pytest.raises(ValueError, match=match):
+        load_robot_config(path)
+
+
+@pytest.mark.parametrize("group", ["time_invariant", "time_varying"])
+def test_reject_enabled_ei(tmp_path: Path, group: str) -> None:
+    config = yaml.safe_load(DEFAULT_CONFIG_PATH.read_text())
+    config["input_shaping"][group]["ei"]["enabled"] = True
+    path = tmp_path / "robot.yaml"
+    path.write_text(yaml.safe_dump(config))
+    with pytest.raises(ValueError, match="EI shaping is not implemented"):
         load_robot_config(path)
 
 
@@ -142,7 +179,8 @@ def test_fingerprint_changes_with_configuration_or_model_identity(change: str) -
     elif change == "timestep":
         config.simulation.dt_s *= 2
     elif change == "shaping-enabled":
-        config.input_shaping.enabled = not config.input_shaping.enabled
+        settings = config.input_shaping.time_varying.zv
+        settings.enabled = not settings.enabled
     elif change == "model-hash":
         model_hash = "2" * 64
     elif change == "settling-tolerance":

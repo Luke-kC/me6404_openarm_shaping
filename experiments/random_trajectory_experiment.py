@@ -14,7 +14,10 @@ from matplotlib.axes import Axes
 
 from me6404_openarm_shaping.configuration import load_robot_config
 from me6404_openarm_shaping.data_types import FloatVector
-from me6404_openarm_shaping.input_shaping import suggest_zvd_parameters
+from me6404_openarm_shaping.input_shaping import (
+    ZVD_FREQUENCY_TOLERANCE,
+    suggest_shaper_parameters,
+)
 from me6404_openarm_shaping.robot_model import (
     LEFT_ARM_JOINT_NAMES,
     MODEL_REVISION,
@@ -51,7 +54,7 @@ def main() -> None:
     lower = joint_ranges[:, 0] + margin
     upper = joint_ranges[:, 1] - margin
     rng = np.random.default_rng(args.seed)
-    zvd_settings = config.input_shaping.zvd
+    zvd_settings = config.input_shaping.time_invariant.zvd
     tau_min = zvd_settings.tau_min_s
     utilization_min = zvd_settings.utilization_min
 
@@ -104,8 +107,8 @@ def main() -> None:
             )
             print()
             continue
-        frequencies, damping, utilization = suggest_zvd_parameters(
-            properties, tau_min=tau_min, utilization_min=utilization_min
+        frequencies, damping, utilization = suggest_shaper_parameters(
+            properties, tau_min, ZVD_FREQUENCY_TOLERANCE, utilization_min
         )
         results.append((frequencies, damping, utilization))
         print(

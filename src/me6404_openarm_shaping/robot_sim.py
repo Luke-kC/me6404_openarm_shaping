@@ -21,14 +21,16 @@ from me6404_openarm_shaping.data_types import (
     TrialRecording,
 )
 from me6404_openarm_shaping.input_shaping import (
+    ZV_FREQUENCY_TOLERANCE,
+    ZVD_FREQUENCY_TOLERANCE,
+    design_zv_shaper,
     design_zvd_shaper,
-    suggest_zvd_parameters,
+    suggest_shaper_parameters,
 )
 from me6404_openarm_shaping.robot_model import (
     MODEL_PATH,
     MODEL_REVISION,
     check_joint_configuration,
-    eval_gravity_torques,
     load_model,
     modal_properties,
 )
@@ -43,6 +45,11 @@ from me6404_openarm_shaping.trajectories import (
     apply_shaper_to_joint_trajectory,
     waypoint_trajectory,
 )
+from me6404_openarm_shaping.tvist import (
+    TvistShaper,
+    apply_tvist_to_joint_trajectory,
+    select_tvist_modes,
+)
 
 
 def main() -> None:
@@ -53,6 +60,11 @@ def main() -> None:
         "--save-csv",
         action="store_true",
         help="save results and metadata in a new uniquely named folder in sim_out/",
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="skip the MuJoCo viewer and real-time pacing; show plots at the end",
     )
     args: argparse.Namespace = parser.parse_args()
     provenance: RunProvenance | None = (
@@ -86,10 +98,9 @@ def main() -> None:
 
     for waypoint in waypoints:
         check_joint_configuration(model, waypoint)
-    qf = waypoints[-1]
 
-    v_lim = config.velocity_limits
-    a_lim = config.acceleration_limits
+    v_lim = 0.8 * config.velocity_limits
+    a_lim = 0.8 * config.acceleration_limits
 
     t: FloatVector
     q: FloatMatrix
@@ -97,37 +108,56 @@ def main() -> None:
     ddq: FloatMatrix
     t, q, dq, ddq = waypoint_trajectory(waypoints, v_lim, a_lim, dt=model.opt.timestep)
     trajectories: dict[str, JointTrajectory] = {
-        "unshaped": {"t": t, "q": q, "dq": dq, "ddq": ddq}
+        "baseline": {"t": t, "q": q, "dq": dq, "ddq": ddq}
     }
-    shaper_design: ShaperDesign | None = None
-
-    if shaping.enabled:
-        # One fixed design from every sample across all unshaped segments.
-        properties: list[ModalProperties] = [
+    shaper_designs: dict[str, ShaperDesign] = {}
+    fixed_shapers = (
+        ("zv", shaping.time_invariant.zv, ZV_FREQUENCY_TOLERANCE, design_zv_shaper),
+        ("zvd", shaping.time_invariant.zvd, ZVD_FREQUENCY_TOLERANCE, design_zvd_shaper),
+    )
+    tvist_shapers = [
+        (kind, settings)
+        for kind, settings in (
+            (TvistShaper.ZV, shaping.time_varying.zv),
+            (TvistShaper.ZVD, shaping.time_varying.zvd),
+        )
+        if settings.enabled
+    ]
+    tvist_schedules: dict[str, list[ModalProperties]] = {}
+    properties: list[ModalProperties] = []
+    if any(settings.enabled for _, settings, _, _ in fixed_shapers) or tvist_shapers:
+        properties = [
             modal_properties(model, configuration, Kp, Kd) for configuration in q
         ]
 
+    for kind, settings, tolerance, design in fixed_shapers:
+        if not settings.enabled:
+            continue
+        label = f"time_invariant_{kind}"
+        # One fixed design from every sample across all baseline segments.
         frequencies_hz: FloatVector
         damping: FloatVector
         utilization: FloatVector
-        frequencies_hz, damping, utilization = suggest_zvd_parameters(
+        frequencies_hz, damping, utilization = suggest_shaper_parameters(
             properties,
-            tau_min=shaping.zvd.tau_min_s,
-            utilization_min=shaping.zvd.utilization_min,
+            tau_min=settings.tau_min_s,
+            frequency_tolerance=tolerance,
+            utilization_min=settings.utilization_min,
         )
-        print("\n----- SHAPER DESIGN -----\n")
+        print(f"\n----- {label.upper()} SHAPER DESIGN -----\n")
         print("Suggested shaper natural frequencies [Hz]:", frequencies_hz)
         print("Suggested shaper damping ratios:", damping)
         print("Suggested frequency-band utilization:", utilization)
         print()
         amplitudes: FloatVector
         delays_s: FloatVector
-        amplitudes, delays_s = design_zvd_shaper(frequencies_hz, damping)
+        amplitudes, delays_s = design(frequencies_hz, damping)
         delay_steps: NDArray[np.intp] = np.rint(delays_s / model.opt.timestep).astype(
             np.intp
         )
-        shaper_design = {
-            "type": shaping.type,
+        shaper_designs[label] = {
+            "type": kind,
+            "frequency_tolerance": tolerance,
             "natural_frequencies_hz": frequencies_hz.tolist(),
             "damping_ratios": damping.tolist(),
             "band_utilization": utilization.tolist(),
@@ -143,11 +173,30 @@ def main() -> None:
         t_shaped, q_shaped, dq_shaped, ddq_shaped = apply_shaper_to_joint_trajectory(
             q, dq, ddq, amplitudes, delays_s, model.opt.timestep
         )
-        trajectories["shaped"] = {
+        trajectories[label] = {
             "t": t_shaped,
             "q": q_shaped,
             "dq": dq_shaped,
             "ddq": ddq_shaped,
+        }
+
+    dt = model.opt.timestep
+    for shaper, settings in tvist_shapers:
+        label = f"tvist_{shaper.value.lower()}"
+        schedule = select_tvist_modes(properties, settings.tau_min_s)
+        q_tvist: FloatMatrix = apply_tvist_to_joint_trajectory(
+            q=q, dt=dt, properties=schedule, shaper_type=shaper, lagrange_order=1
+        )
+        # The filter holds the last modal sample throughout its appended tail.
+        tvist_schedules[label] = schedule + [schedule[-1]] * (
+            len(q_tvist) - len(schedule)
+        )
+        dq_tvist = np.gradient(q_tvist, dt, axis=0, edge_order=2)
+        trajectories[label] = {
+            "t": np.arange(len(q_tvist)) * dt,
+            "q": q_tvist,
+            "dq": dq_tvist,
+            "ddq": np.gradient(dq_tvist, dt, axis=0, edge_order=2),
         }
 
     simulation_time = max(
@@ -161,7 +210,14 @@ def main() -> None:
     for label, trajectory in trajectories.items():
         print(f"\nRunning {label} trial\n")
         result = run_trial(
-            model, trajectory, qi, Kp, Kd, simulation_time, config=config
+            model,
+            trajectory,
+            qi,
+            Kp,
+            Kd,
+            simulation_time,
+            config=config,
+            headless=args.headless,
         )
         recordings[label] = result
         print_simulation_checks(label, result["simulation_checks"])
@@ -178,11 +234,16 @@ def main() -> None:
         run_dir: Path = save_experiment(
             recordings,
             config,
-            shaper_design,
+            shaper_designs,
             simulation_time,
             output_dir,
             provenance=provenance,
             configuration_fingerprint=configuration_sha256,
+            tvist_schedules={
+                label: schedule
+                for label, schedule in tvist_schedules.items()
+                if label in recordings
+            },
         )
         print("\nSaved simulation results and metadata:")
         print(run_dir)

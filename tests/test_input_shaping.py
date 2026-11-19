@@ -6,9 +6,11 @@ import pytest
 from me6404_openarm_shaping.data_types import ModalSample
 from me6404_openarm_shaping.input_shaping import (
     convolve_shapers,
+    design_zv_shaper,
     design_zvd_shaper,
     residual_vibration_factor,
-    suggest_zvd_parameters,
+    suggest_shaper_parameters,
+    zv_shaper,
     zvd_shaper,
 )
 
@@ -87,7 +89,7 @@ def test_convolved_zvd_residual_at_both_design_pairs() -> None:
         np.testing.assert_allclose(residual, 0, rtol=0, atol=1e-12)
 
 
-def test_suggest_zvd_parameters() -> None:
+def test_suggest_shaper_parameters_zvd_band() -> None:
     # One full 0.86--1.14 Hz band, one isolated sample (zero span), and
     # one rapidly decaying sample that must be excluded before band selection.
     samples: list[ModalSample] = [
@@ -96,7 +98,7 @@ def test_suggest_zvd_parameters() -> None:
         {"natural_frequency_hz": np.array([0.86, 100.0]),
          "damping_ratio": np.array([0.05, 0.5])},
     ]
-    frequencies, damping, utilization = suggest_zvd_parameters(samples, tau_min=0.2)
+    frequencies, damping, utilization = suggest_shaper_parameters(samples, 0.2, 0.14)
     np.testing.assert_allclose(frequencies, [1.0], rtol=0, atol=1e-14)
     np.testing.assert_allclose(damping, [0.06], rtol=0, atol=1e-14)
     np.testing.assert_allclose(utilization, [1.0], rtol=0, atol=1e-14)
@@ -107,8 +109,8 @@ def test_suggest_zvd_parameters() -> None:
     [{"natural_frequency_hz": np.array([100.0]), "damping_ratio": np.array([0.5])}],
     [{"natural_frequency_hz": np.array([1.0]), "damping_ratio": np.array([0.1])}],
 ])
-def test_suggest_zvd_parameters_empty_result(samples: list[ModalSample]) -> None:
-    for values in suggest_zvd_parameters(samples, tau_min=0.2):
+def test_suggest_shaper_parameters_empty_result(samples: list[ModalSample]) -> None:
+    for values in suggest_shaper_parameters(samples, 0.2, 0.14):
         assert values.shape == (0,)
         assert values.dtype == np.float64
 
@@ -124,8 +126,8 @@ def test_suggest_zvd_returns_low_utilization_candidates_when_requested() -> None
         "natural_frequency_hz": np.array([0.86, 1.14, 3.0]),
         "damping_ratio": np.array([0.05, 0.07, 0.1]),
     }]
-    frequencies, damping, utilization = suggest_zvd_parameters(
-        samples, tau_min=0.2, utilization_min=0.0
+    frequencies, damping, utilization = suggest_shaper_parameters(
+        samples, 0.2, 0.14, utilization_min=0.0
     )
     np.testing.assert_allclose(frequencies, [1.0, 3.0 / 0.86], rtol=0, atol=1e-14)
     np.testing.assert_allclose(damping, [0.06, 0.1], rtol=0, atol=1e-14)
@@ -133,12 +135,32 @@ def test_suggest_zvd_returns_low_utilization_candidates_when_requested() -> None
     selected = utilization >= 0.5
     for candidates, suggestions in zip(
         (frequencies, damping, utilization),
-        suggest_zvd_parameters(samples, tau_min=0.2),
+        suggest_shaper_parameters(samples, 0.2, 0.14),
         strict=True,
     ):
         np.testing.assert_allclose(
             candidates[selected], suggestions, rtol=0, atol=1e-14
         )
+
+
+def test_narrow_zv_band_requires_more_shapers() -> None:
+    samples: list[ModalSample] = [{
+        "natural_frequency_hz": np.array([0.97, 1.03, 1.067, 1.132]),
+        "damping_ratio": np.full(4, 0.1),
+    }]
+    narrow, _, _ = suggest_shaper_parameters(samples, 0.2, 0.03, 0.3)
+    wide, _, _ = suggest_shaper_parameters(samples, 0.2, 0.14, 0.3)
+    np.testing.assert_allclose(narrow, [1.0, 1.1])
+    assert len(wide) == 1
+
+
+def test_design_zv_shaper_two_modes() -> None:
+    actual = design_zv_shaper([2.2, 4.0], [0.1, 0.2])
+    expected = convolve_shapers(
+        *zv_shaper(2 * np.pi * 2.2, 0.1), *zv_shaper(2 * np.pi * 4.0, 0.2)
+    )
+    for values, reference in zip(actual, expected, strict=True):
+        np.testing.assert_allclose(values, reference)
 
 
 def test_design_zvd_shaper_single_mode() -> None:

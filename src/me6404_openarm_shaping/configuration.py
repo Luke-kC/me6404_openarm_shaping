@@ -1,10 +1,11 @@
 """Load joint gains and motion limits for offline analysis and simulation."""
 
 import json
+import warnings
 from dataclasses import asdict, dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import Literal, cast
+from typing import cast
 
 import numpy as np
 import yaml
@@ -32,16 +33,39 @@ class SimulationAssessmentConfig:
 
 
 @dataclass
-class ZVDConfig:
+class ShaperSwitch:
+    enabled: bool
+
+
+@dataclass
+class FixedShaperConfig(ShaperSwitch):
     tau_min_s: float
     utilization_min: float
 
 
 @dataclass
+class TvistShaperConfig(ShaperSwitch):
+    tau_min_s: float = 0.0
+
+
+@dataclass
+class TimeInvariantShapingConfig:
+    zv: FixedShaperConfig
+    zvd: FixedShaperConfig
+    ei: ShaperSwitch
+
+
+@dataclass
+class TimeVaryingShapingConfig:
+    zv: TvistShaperConfig
+    zvd: TvistShaperConfig
+    ei: ShaperSwitch
+
+
+@dataclass
 class InputShapingConfig:
-    enabled: bool
-    type: Literal["zvd"]
-    zvd: ZVDConfig
+    time_invariant: TimeInvariantShapingConfig
+    time_varying: TimeVaryingShapingConfig
 
 
 @dataclass
@@ -54,6 +78,77 @@ class RobotConfig:
     simulation: SimulationConfig
     input_shaping: InputShapingConfig
     simulation_assessment: SimulationAssessmentConfig
+
+
+def _load_input_shaping(shaping: dict[str, object]) -> InputShapingConfig:
+    fixed = cast(dict[str, object], shaping["time_invariant"])
+    varying = cast(dict[str, object], shaping["time_varying"])
+    for group, entries, allowed in (
+        ("time_invariant", fixed, {"zv", "zvd", "ei"}),
+        ("time_varying", varying, {"zv", "zvd", "ei"}),
+    ):
+        if unknown := entries.keys() - allowed:
+            raise ValueError(
+                f"Unknown input_shaping.{group} entries: {sorted(unknown)}"
+            )
+
+    def enabled(entry: object, name: str) -> bool:
+        value = cast(dict[str, object], entry)["enabled"]
+        if not isinstance(value, bool):
+            raise TypeError(f"input_shaping.{name}.enabled must be a YAML boolean.")
+        return value
+
+    def tau_min(value: float, name: str) -> float:
+        value = float(value)
+        if not np.isfinite(value) or value < 0:
+            raise ValueError(
+                f"input_shaping.{name}.tau_min_s must be finite and nonnegative."
+            )
+        return value
+
+    fixed_ei = enabled(fixed["ei"], "time_invariant.ei")
+    varying_ei = enabled(varying["ei"], "time_varying.ei")
+    if fixed_ei or varying_ei:
+        raise ValueError(
+            "EI shaping is not implemented; leave its enabled flags false."
+        )
+
+    def fixed_settings(kind: str) -> FixedShaperConfig:
+        name = f"time_invariant.{kind}"
+        entry = cast(dict[str, float], fixed[kind])
+        utilization_min = float(entry["utilization_min"])
+        if not np.isfinite(utilization_min) or not 0 <= utilization_min <= 1:
+            raise ValueError(f"{name}.utilization_min must be within [0, 1].")
+        return FixedShaperConfig(
+            enabled(entry, name), tau_min(entry["tau_min_s"], name), utilization_min
+        )
+
+    def tvist_settings(kind: str) -> TvistShaperConfig:
+        name = f"time_varying.{kind}"
+        entry = cast(dict[str, float], varying[kind])
+        settings = TvistShaperConfig(enabled(entry, name))
+        settings.tau_min_s = tau_min(entry.get("tau_min_s", settings.tau_min_s), name)
+        if settings.tau_min_s > 0:
+            warnings.warn(
+                f"input_shaping.{name}.tau_min_s is {settings.tau_min_s:g} s. "
+                "A positive TVIST cutoff can switch modes in or out during the "
+                "move and cause commanded acceleration spikes.",
+                stacklevel=4,
+            )
+        return settings
+
+    return InputShapingConfig(
+        time_invariant=TimeInvariantShapingConfig(
+            zv=fixed_settings("zv"),
+            zvd=fixed_settings("zvd"),
+            ei=ShaperSwitch(fixed_ei),
+        ),
+        time_varying=TimeVaryingShapingConfig(
+            zv=tvist_settings("zv"),
+            zvd=tvist_settings("zvd"),
+            ei=ShaperSwitch(varying_ei),
+        ),
+    )
 
 
 def load_robot_config(
@@ -97,18 +192,7 @@ def load_robot_config(
             raise ValueError(f"Invalid simulation setting: {name}")
         simulation[name] = value
 
-    shaping = cast(dict[str, object], config["input_shaping"]).copy()
-    if not isinstance(shaping["enabled"], bool):
-        raise TypeError("input_shaping.enabled must be a YAML boolean.")
-    if shaping["type"] != "zvd":
-        raise ValueError("Only input_shaping.type: zvd is currently supported.")
-    zvd = cast(dict[str, float], shaping["zvd"]).copy()
-    tau_min = float(zvd["tau_min_s"])
-    utilization_min = float(zvd["utilization_min"])
-    if not np.isfinite(tau_min) or tau_min < 0:
-        raise ValueError("zvd.tau_min_s must be finite and nonnegative.")
-    if not np.isfinite(utilization_min) or not 0 <= utilization_min <= 1:
-        raise ValueError("zvd.utilization_min must be within [0, 1].")
+    shaping = _load_input_shaping(cast(dict[str, object], config["input_shaping"]))
     assessment = cast(dict[str, float], config["simulation_assessment"]).copy()
     for name in (
         "settling_window_s",
@@ -136,11 +220,7 @@ def load_robot_config(
             minimum_duration_s=simulation["minimum_duration_s"],
             settling_time_s=simulation["settling_time_s"],
         ),
-        input_shaping=InputShapingConfig(
-            enabled=shaping["enabled"],
-            type="zvd",
-            zvd=ZVDConfig(tau_min_s=tau_min, utilization_min=utilization_min),
-        ),
+        input_shaping=shaping,
         simulation_assessment=SimulationAssessmentConfig(
             settling_window_s=assessment["settling_window_s"],
             position_tolerance_rad=assessment["position_tolerance_rad"],

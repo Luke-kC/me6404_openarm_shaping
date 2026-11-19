@@ -80,6 +80,19 @@ Only after explicit approval is given can hardware be commanded.
 
 `--save-csv` creates `sim_out/` if needed and saves results and metadata in a unique run folder there.
 
+The simulation can also run headless:
+
+```bash
+uv run --frozen --no-sync python -m me6404_openarm_shaping.robot_sim --headless --save-csv
+```
+
+Fixed-shaper frequencies and damping ratios are saved under `shaper_designs`
+in the YAML metadata. For TVIST, `tvist_modes.csv` records the selected natural
+frequencies in Hz and damping ratios at every command sample, including the
+held schedule during the shaping tail. A blank mode row means no mode
+qualified. Rank is within the selected set at that sample, not a tracked
+physical mode. The metadata also records mode-count histograms.
+
 **PASSING SIM** means reference position/velocity/acceleration limits, measured position/velocity limits, torque clipping, collision checks, settling, and data validity all passed.
 
 Measured acceleration is diagnostic only; the named closed left finger-pair contact is informational.

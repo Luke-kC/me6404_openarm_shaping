@@ -4,7 +4,9 @@ import csv
 import platform
 import subprocess
 import time
+from collections import Counter
 from collections.abc import Sequence
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
@@ -27,6 +29,7 @@ from me6404_openarm_shaping.data_types import (
     FloatVector,
     GitState,
     JointTrajectory,
+    ModalProperties,
     RunProvenance,
     ShaperDesign,
     TrialRecording,
@@ -56,8 +59,9 @@ def run_trial(
     simulation_time: float,
     *,
     config: RobotConfig,
+    headless: bool = False,
 ) -> TrialRecording:
-    """Run one paced trial with fresh data; return full-resolution recordings.
+    """Run one trial with fresh data; headless mode skips rendering and pacing.
 
     Preserve the existing controller:
     PD with zero desired velocity and gravity feedforward based on commanded joint position.
@@ -103,22 +107,26 @@ def run_trial(
     for index, q_command in enumerate(trajectory["q"]):
         trajectory_gravity[index] = eval_gravity_torques(model, q_command)
 
-    with mujoco.viewer.launch_passive(model, data) as viewer:
-        # Start each trial framed on the left arm; mouse controls remain free.
-        shoulder = data.body("openarm_left_link1").xpos
-        hand = data.body("openarm_left_hand").xpos
-        with viewer.lock():
-            viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
-            viewer.cam.lookat[:] = (shoulder + hand) / 2
-            viewer.cam.distance = 1.2
-            viewer.cam.azimuth = 135.0
-            viewer.cam.elevation = -20.0
+    viewer_context = (
+        nullcontext() if headless else mujoco.viewer.launch_passive(model, data)
+    )
+    with viewer_context as viewer:
+        if viewer is not None:
+            # Start each trial framed on the left arm; mouse controls remain free.
+            shoulder = data.body("openarm_left_link1").xpos
+            hand = data.body("openarm_left_hand").xpos
+            with viewer.lock():
+                viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+                viewer.cam.lookat[:] = (shoulder + hand) / 2
+                viewer.cam.distance = 1.2
+                viewer.cam.azimuth = 135.0
+                viewer.cam.elevation = -20.0
 
         step_index = 0
         step_deadline = time.perf_counter()
         next_sync = step_deadline
         sync_interval = 1.0 / 60.0
-        while step_index < step_count and viewer.is_running():
+        while step_index < step_count and (viewer is None or viewer.is_running()):
             target_index = min(step_index, len(trajectory["q"]) - 1)
             q_measured = data.qpos[position_indices]
             dq_measured = data.qvel[velocity_indices]
@@ -170,14 +178,15 @@ def run_trial(
             reference_accelerations.append(ddq_reference)
             step_index += 1
 
-            now = time.perf_counter()
-            if now >= next_sync:
-                viewer.sync()
-                next_sync = now + sync_interval
-            step_deadline += model.opt.timestep
-            sleep_time = step_deadline - time.perf_counter()
-            if sleep_time > 0:
-                time.sleep(sleep_time)
+            if viewer is not None:
+                now = time.perf_counter()
+                if now >= next_sync:
+                    viewer.sync()
+                    next_sync = now + sync_interval
+                step_deadline += model.opt.timestep
+                sleep_time = step_deadline - time.perf_counter()
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
 
     # Refresh contacts at the last integrated state, absent from the CSV's
     # pre-integration position rows. This does not advance simulation time.
@@ -308,12 +317,13 @@ def capture_run_provenance(
 def save_experiment(
     recordings: dict[str, TrialRecording],
     config: RobotConfig,
-    shaper_design: ShaperDesign | None,
+    shaper_designs: dict[str, ShaperDesign],
     simulation_time: float,
     output_dir: Path,
     *,
     provenance: RunProvenance,
     configuration_fingerprint: str,
+    tvist_schedules: dict[str, list[ModalProperties]] | None = None,
 ) -> Path:
     """Save paired result/metadata files in an atomically unique run directory.
 
@@ -336,7 +346,7 @@ def save_experiment(
         "results_file": results_path.name,
         "config": config_snapshot,
         "experiment_configuration_sha256": configuration_fingerprint,
-        "shaper_design": shaper_design,
+        "shaper_designs": shaper_designs,
         "simulation_duration_requested_s": float(simulation_time),
         "trials": {
             label: {
@@ -374,6 +384,34 @@ def save_experiment(
             "mujoco": mujoco.__version__,
         },
     }
+    if tvist_schedules:
+        modes_path = run_dir / "tvist_modes.csv"
+        metadata["tvist_modes_file"] = modes_path.name
+        metadata["tvist_mode_count_histograms"] = {
+            label: dict(
+                sorted(
+                    Counter(
+                        len(sample["natural_frequency_hz"]) for sample in schedule
+                    ).items()
+                )
+            )
+            for label, schedule in tvist_schedules.items()
+        }
+        with modes_path.open("x", newline="") as stream:
+            writer = csv.writer(stream)
+            writer.writerow(
+                ["trajectory", "time_s", "frequency_rank", "natural_frequency_hz", "damping_ratio"]
+            )
+            for label, schedule in tvist_schedules.items():
+                for index, sample in enumerate(schedule):
+                    time_s = index * config.simulation.dt_s
+                    frequencies = sample["natural_frequency_hz"]
+                    if not len(frequencies):
+                        writer.writerow([label, time_s, None, None, None])
+                    for rank, (frequency, damping) in enumerate(
+                        zip(frequencies, sample["damping_ratio"], strict=True), start=1
+                    ):
+                        writer.writerow([label, time_s, rank, frequency, damping])
     with lockfile_path.open("xb") as stream:
         stream.write(provenance["lockfile_bytes"])
     save_recordings_csv(recordings, results_path)
@@ -419,7 +457,13 @@ def plot_comparison(
     trajectories: dict[str, JointTrajectory], recordings: dict[str, TrialRecording]
 ) -> None:
     """Build commanded and recorded comparisons without launching a viewer."""
-    colors = {"unshaped": "tab:blue", "shaped": "tab:orange"}
+    colors = {
+        "baseline": "tab:blue",
+        "time_invariant_zv": "tab:red",
+        "time_invariant_zvd": "tab:orange",
+        "tvist_zv": "tab:purple",
+        "tvist_zvd": "tab:green",
+    }
     quantities: tuple[tuple[Literal["q", "dq", "ddq"], str, str], ...] = (
         ("q", "Commanded position", "Position [rad]"),
         ("dq", "Commanded velocity", "Velocity [rad/s]"),

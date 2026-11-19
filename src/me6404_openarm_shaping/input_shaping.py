@@ -1,10 +1,50 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from math import exp, pi, sqrt
 
 import numpy as np
 from numpy.typing import ArrayLike
 
 from me6404_openarm_shaping.data_types import FloatVector, ModalSample
+
+ZV_FREQUENCY_TOLERANCE = 0.03
+ZVD_FREQUENCY_TOLERANCE = 0.14
+
+
+def zv_shaper(
+    omega_n_rad_s: float, zeta: float
+) -> tuple[
+    FloatVector,
+    FloatVector,
+]:
+    """
+    omega_n_rad_s: positive natural frequency (rad/s)
+    zeta: damping, 0 <= zeta < 1
+
+    Returns A, t_s for a ZV input shaper
+
+    A: impulse amplitudes
+    t_s: times for each impulse
+    """
+
+    if not np.isfinite(omega_n_rad_s) or not np.isfinite(zeta):
+        raise ValueError("Omega_n_rad_s and zeta must both be finite")
+
+    if omega_n_rad_s <= 0.0:
+        raise ValueError("Omega_n_rad_s must be > 0.0")
+
+    if zeta < 0.0 or zeta >= 1.0:
+        raise ValueError("zeta must be within [0, 1.0)")
+
+    K = exp(-(zeta * pi) / sqrt(1 - zeta**2))
+
+    w_d = omega_n_rad_s * sqrt(1 - zeta**2)
+
+    Td = 2 * pi / w_d
+
+    A = np.array([1.0 / (1.0 + K), K / (1.0 + K)])
+    t_s = np.array([0.0, Td / 2.0])
+
+    return A, t_s
 
 
 def zvd_shaper(
@@ -77,21 +117,26 @@ def convolve_shapers(
     return amp, t_s
 
 
-def suggest_zvd_parameters(
-    modal_samples: Sequence[ModalSample], tau_min: float, utilization_min: float = 0.5
+def suggest_shaper_parameters(
+    modal_samples: Sequence[ModalSample],
+    tau_min: float,
+    frequency_tolerance: float,
+    utilization_min: float = 0.5,
 ) -> tuple[FloatVector, FloatVector, FloatVector]:
     """Return suggested natural frequencies [Hz], damping ratios, utilization.
 
     Pool paired modal samples and retain decay times >= tau_min [s].
 
-    Greedily cover sorted frequencies with the hardcoded 0.86--1.14 ZVD
-    design-band heuristic, interpolate nominal damping, and retain bands with
+    Greedily cover sorted frequencies with bands of ±frequency_tolerance
+    relative to the nominal frequency, interpolate nominal damping, and retain bands with
     span utilization >= utilization_min (default 0.5).
 
     Set utilization_min=0 to return all candidates.
 
     Utilization is not density or occupied bandwidth.
     """
+    if not 0 < frequency_tolerance < 1:
+        raise ValueError("frequency_tolerance must be between 0 and 1 (exclusive).")
     if not modal_samples:
         return np.empty(0), np.empty(0), np.empty(0)
 
@@ -124,8 +169,8 @@ def suggest_zvd_parameters(
 
     while next_uncovered < len(frequencies_hz):
         lower_hz = frequencies_hz[next_uncovered]
-        nominal_hz = lower_hz / 0.86
-        upper_hz = nominal_hz * 1.14
+        nominal_hz = lower_hz / (1 - frequency_tolerance)
+        upper_hz = nominal_hz * (1 + frequency_tolerance)
         next_uncovered = np.searchsorted(frequencies_hz, upper_hz, side="right")
         covered_width = frequencies_hz[next_uncovered - 1] - lower_hz
         band_utilization = covered_width / (upper_hz - lower_hz)
@@ -145,25 +190,36 @@ def design_zvd_shaper(
     nominal_frequencies_hz: ArrayLike,
     nominal_damping_ratios: ArrayLike,
 ) -> tuple[FloatVector, FloatVector]:
-    """Design/convolve ZVDs from paired frequencies [Hz] and damping ratios.
+    """Design/convolve ZVDs from paired frequencies [Hz] and damping ratios."""
+    return _design_shaper(nominal_frequencies_hz, nominal_damping_ratios, zvd_shaper)
 
-    Return amplitudes and continuous impulse times [s].
 
-    Empty input gives the identity shaper.
+def design_zv_shaper(
+    nominal_frequencies_hz: ArrayLike,
+    nominal_damping_ratios: ArrayLike,
+) -> tuple[FloatVector, FloatVector]:
+    """Design/convolve ZVs from paired frequencies [Hz] and damping ratios."""
+    return _design_shaper(nominal_frequencies_hz, nominal_damping_ratios, zv_shaper)
 
-    Times are not rounded or merged; output may be unsorted.
-    """
+
+def _design_shaper(
+    nominal_frequencies_hz: ArrayLike,
+    nominal_damping_ratios: ArrayLike,
+    design_mode: Callable[[float, float], tuple[FloatVector, FloatVector]],
+) -> tuple[FloatVector, FloatVector]:
+    """Return amplitudes and unrounded impulse times [s]; empty gives identity."""
     frequencies = np.asarray(nominal_frequencies_hz, dtype=np.float64)
     damping = np.asarray(nominal_damping_ratios, dtype=np.float64)
 
     if frequencies.ndim != 1 or damping.shape != frequencies.shape:
         raise ValueError("Nominal frequencies and damping must be matching 1-D arrays.")
+
     amplitudes, times_s = np.array([1.0]), np.array([0.0])
 
     for index, (frequency_hz, zeta) in enumerate(
         zip(frequencies, damping, strict=True)
     ):
-        next_amplitudes, next_times = zvd_shaper(2 * np.pi * frequency_hz, zeta)
+        next_amplitudes, next_times = design_mode(2 * np.pi * frequency_hz, zeta)
         if index == 0:
             amplitudes, times_s = next_amplitudes, next_times
         else:

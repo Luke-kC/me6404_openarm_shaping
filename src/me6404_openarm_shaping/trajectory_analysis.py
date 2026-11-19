@@ -11,9 +11,10 @@ from me6404_openarm_shaping.configuration import (
     load_robot_config,
 )
 from me6404_openarm_shaping.input_shaping import (
+    ZVD_FREQUENCY_TOLERANCE,
     design_zvd_shaper,
     residual_vibration_factor,
-    suggest_zvd_parameters,
+    suggest_shaper_parameters,
 )
 from me6404_openarm_shaping.robot_model import (
     MODEL_PATH,
@@ -35,8 +36,8 @@ def main() -> None:
     configuration_sha256 = experiment_fingerprint(config, model_sha256, MODEL_REVISION)
     print(f"\nExperiment configuration: {configuration_sha256}\n")
 
-    if not config.input_shaping.enabled:
-        print("Input shaping is disabled for simulation.")
+    if not config.input_shaping.time_invariant.zvd.enabled:
+        print("Time-invariant ZVD is disabled for simulation.")
         print(
             "Modal analysis and candidate-shaper sensitivity are shown "
             "for design exploration only."
@@ -48,7 +49,7 @@ def main() -> None:
 
     waypoints = config.waypoints
 
-    zvd_settings = config.input_shaping.zvd
+    zvd_settings = config.input_shaping.time_invariant.zvd
 
     for waypoint in waypoints:
         check_joint_configuration(model, waypoint)
@@ -79,7 +80,9 @@ def main() -> None:
     zeta_target = zeta[retained]
 
     candidate_frequencies, candidate_damping, candidate_utilization = (
-        suggest_zvd_parameters(properties, tau_min, utilization_min=0.0)
+        suggest_shaper_parameters(
+            properties, tau_min, ZVD_FREQUENCY_TOLERANCE, utilization_min=0.0
+        )
     )
 
     print("\n-----INPUT SHAPING CANDIDATES-----")

@@ -30,8 +30,8 @@ def main() -> None:
 
     # ==================== SETUP AND NUMERICAL ANALYSIS ====================
 
-    model = load_model()
     config = load_robot_config()
+    model = load_model(config.passive_damping)
     model_sha256 = sha256(MODEL_PATH.read_bytes()).hexdigest()
     configuration_sha256 = experiment_fingerprint(config, model_sha256, MODEL_REVISION)
     print(f"\nExperiment configuration: {configuration_sha256}\n")

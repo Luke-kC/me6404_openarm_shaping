@@ -8,6 +8,7 @@ from pathlib import Path
 from subprocess import CompletedProcess
 from unittest.mock import MagicMock
 
+import matplotlib.pyplot as plt
 import mujoco
 import numpy as np
 import pytest
@@ -16,14 +17,15 @@ from numpy.typing import NDArray
 
 from me6404_openarm_shaping import robot_sim, simulation_helpers
 from me6404_openarm_shaping.configuration import (
+    FixedEIConfig,
     FixedShaperConfig,
     InputShapingConfig,
     RobotConfig,
-    ShaperSwitch,
     SimulationAssessmentConfig,
     SimulationConfig,
     TimeInvariantShapingConfig,
     TimeVaryingShapingConfig,
+    TvistEIConfig,
     TvistShaperConfig,
     experiment_fingerprint,
     load_robot_config,
@@ -135,6 +137,8 @@ def test_unshaped_waypoint_trial(
     monkeypatch.setattr(robot_sim, "capture_run_provenance", capture)
     qi = np.zeros(7)
     monkeypatch.setattr(robot_sim, "load_model", lambda: MagicMock())
+    damping = MagicMock()
+    monkeypatch.setattr(robot_sim, "set_passive_damping", damping)
     config = RobotConfig(
         motor_kp=np.ones(7),
         motor_kd=np.ones(7),
@@ -149,10 +153,10 @@ def test_unshaped_waypoint_trial(
             TimeInvariantShapingConfig(
                 FixedShaperConfig(False, 0.2, 0.4),
                 FixedShaperConfig(False, 0.2, 0.4),
-                ShaperSwitch(False),
+                FixedEIConfig(False, 0.1, 0.3),
             ),
             TimeVaryingShapingConfig(
-                 TvistShaperConfig(False), TvistShaperConfig(False), ShaperSwitch(False)
+                TvistShaperConfig(False), TvistShaperConfig(False), TvistEIConfig(False)
             ),
         ),
     )
@@ -177,6 +181,7 @@ def test_unshaped_waypoint_trial(
     monkeypatch.setattr("matplotlib.pyplot.show", show)
 
     robot_sim.main()
+    assert damping.call_args.args[1] is config.passive_damping
 
     np.testing.assert_array_equal(
         generator.call_args.args[1], 0.8 * config.velocity_limits
@@ -225,6 +230,7 @@ def test_whole_trajectory_shaper_design(
     model = MagicMock()
     model.opt.timestep = 0.01
     monkeypatch.setattr(robot_sim, "load_model", lambda: model)
+    monkeypatch.setattr(robot_sim, "set_passive_damping", MagicMock())
     monkeypatch.setattr(robot_sim, "ModalWorkspace", MagicMock())
     config = RobotConfig(
         motor_kp=np.ones(7),
@@ -240,12 +246,12 @@ def test_whole_trajectory_shaper_design(
             TimeInvariantShapingConfig(
                 FixedShaperConfig(enable_zv, 0.1, 0.3),
                 FixedShaperConfig(True, 0.2, 0.4),
-                ShaperSwitch(False),
+                FixedEIConfig(False, 0.1, 0.3),
             ),
             TimeVaryingShapingConfig(
                 TvistShaperConfig(enable_zv, 0.0),
                 TvistShaperConfig(True, 0.1),
-                ShaperSwitch(False),
+                TvistEIConfig(False),
             ),
         ),
     )
@@ -414,6 +420,26 @@ def test_whole_trajectory_shaper_design(
     assert saved_design["amplitudes"] == [1.0]
     assert saved_design["rounded_delay_steps"] == [0]
     assert saved_design["applied_delays_s"] == [0.0]
+
+
+def test_save_joint_position_plot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    figures_before = plt.get_fignums()
+    plot = MagicMock(wraps=simulation_helpers._plot_joint_panels)
+    monkeypatch.setattr(simulation_helpers, "_plot_joint_panels", plot)
+    recordings = {"baseline": _recording(3), "tvist_zvd": _recording(3)}
+    path = tmp_path / "joint_positions.png"
+    simulation_helpers.save_joint_position_plot(recordings, path, trajectory_id="case")
+
+    plot.assert_called_once()
+    series, title, units = plot.call_args.args
+    assert [label for label, *_ in series] == list(recordings)
+    assert all(values is recordings[label]["q"] for label, _, values, _, _ in series)
+    assert title == "case: Recorded position"
+    assert units == "Position [rad]"
+    assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    assert plt.get_fignums() == figures_before
 
 
 def test_plot_comparison_supports_tvist(monkeypatch: pytest.MonkeyPatch) -> None:

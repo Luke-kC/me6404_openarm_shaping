@@ -17,6 +17,7 @@ from me6404_openarm_shaping.tvist import (
     [
         (TvistShaper.ZV, 0.5),
         (TvistShaper.ZVD, 1.0),
+        (TvistShaper.EI, 1.0),
     ],
 )
 def test_tvist_multimode_tail(shaper_type, delay_factor):
@@ -75,6 +76,31 @@ def test_tvist_multimode_tail(shaper_type, delay_factor):
 
     # 4. Input properties list was not modified.
     assert len(properties) == n_samples
+
+
+def test_tvist_ei_no_jump_at_polynomial_fit_boundary() -> None:
+    dt = 0.01
+    time = np.arange(100) * dt
+    q = np.repeat(time[:, None], 7, axis=1)
+    schedule: list[ModalProperties] = []
+    for index in range(len(time)):
+        zeta = 0.3 + (1e-7 if index >= 50 else -1e-7)
+        frequency_hz = 4.0
+        damped_hz = frequency_hz * np.sqrt(1 - zeta**2)
+        pole = 2 * np.pi * (-zeta * frequency_hz + 1j * damped_hz)
+        schedule.append(
+            {
+                "natural_frequency_hz": np.array([frequency_hz]),
+                "damped_frequency_hz": np.array([damped_hz]),
+                "damping_ratio": np.array([zeta]),
+                "eigenvalues": np.array([pole]),
+                "real_eigenvalues": np.array([]),
+                "stable": True,
+            }
+        )
+    shaped = apply_tvist_to_joint_trajectory(q, dt, schedule, TvistShaper.EI)
+    # Well into the ramp, a nearly constant shaper should preserve its slope.
+    assert shaped[50, 0] - shaped[49, 0] == pytest.approx(dt, abs=1e-6)
 
 
 def test_tvist_time_varying_frequency():

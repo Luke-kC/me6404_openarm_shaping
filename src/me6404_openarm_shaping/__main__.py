@@ -33,8 +33,8 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        model = load_model()
         config = load_robot_config()
+        model = load_model(config.passive_damping)
         motor_kp, motor_kd = config.motor_kp, config.motor_kd
 
         check_joint_configuration(model, args.q)

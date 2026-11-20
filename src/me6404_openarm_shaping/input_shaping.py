@@ -1,5 +1,6 @@
 from collections.abc import Callable, Sequence
-from math import exp, pi, sqrt
+from functools import partial
+from math import acos, exp, pi, sqrt
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -8,6 +9,16 @@ from me6404_openarm_shaping.data_types import FloatVector, ModalSample
 
 ZV_FREQUENCY_TOLERANCE = 0.03
 ZVD_FREQUENCY_TOLERANCE = 0.14
+DEFAULT_EI_RESIDUAL_TOLERANCE = 0.05
+
+
+def ei_frequency_tolerance(residual_tolerance: float) -> float:
+    """Greedy coverage half-band from undamped EI, not a damped residual bound."""
+    if residual_tolerance == 0:
+        return ZVD_FREQUENCY_TOLERANCE  # Zero-tolerance EI is exactly ZVD.
+    if residual_tolerance == DEFAULT_EI_RESIDUAL_TOLERANCE:
+        return 0.20  # Round the analytical 5% band to the usual ±20%.
+    return acos(1 - 4 * residual_tolerance / (1 + residual_tolerance)) / pi
 
 
 def zv_shaper(
@@ -81,6 +92,65 @@ def zvd_shaper(
     A = np.array([1, 2 * K, K**2]) / ((1 + K) ** 2)
 
     return A, t_s
+
+
+def ei_shaper(
+    omega_n_rad_s: float,
+    zeta: float,
+    residual_tolerance: float = DEFAULT_EI_RESIDUAL_TOLERANCE,
+    *,
+    use_polynomial_fit: bool = True,
+) -> tuple[FloatVector, FloatVector]:
+    """Three-impulse EI with a damped polynomial fit through zeta = 0.3.
+
+    Above the fit range, use a nonnegative half-period design targeting no
+    more than the specified nominal residual, not an equal-ripple guarantee.
+    Set use_polynomial_fit=False to use that design throughout a modal schedule
+    and avoid a jump in amplitudes and delays at the fit boundary.
+    """
+    amplitudes, times_s = zvd_shaper(omega_n_rad_s, zeta)
+    if not 0 <= residual_tolerance < 1:
+        raise ValueError("EI residual_tolerance must be within [0, 1).")
+    if residual_tolerance == 0:
+        return amplitudes, times_s
+
+    v = residual_tolerance
+    if zeta == 0:
+        return np.array([(1 + v) / 4, (1 - v) / 2, (1 + v) / 4]), times_s
+
+    if use_polynomial_fit and zeta <= 0.3:
+        z = zeta
+        a1 = (
+            0.24968
+            + 0.24961 * v
+            + (0.80008 + 1.23328 * v) * z
+            + (0.49599 + 3.17316 * v) * z**2
+        )
+        a3 = (
+            0.25149
+            + 0.21474 * v
+            + (-0.83249 + 1.41498 * v) * z
+            + (0.85181 - 4.90094 * v) * z**2
+        )
+        middle_fraction = (
+            0.49990
+            + v * z * (0.46159 + 4.26169 * z + 1.75601 * z**2)
+            + v**2 * z * (8.57843 - 108.644 * z + 336.989 * z**2)
+        )
+        fitted = np.array([a1, 1 - (a1 + a3), a3])
+        if np.all(fitted >= 0) and 0 < middle_fraction < 1:
+            times_s[1] = times_s[-1] * middle_fraction
+            return fitted, times_s
+
+    # Blend ZVD (zero nominal residual) with the in-phase outer impulses.
+    # Their weights are proportional to [1, 0, K²], where K is the
+    # half-period decay. The nominal signed residual is linear in the blend.
+    outer = amplitudes.copy()
+    outer[1] = 0
+    outer /= outer.sum()
+    outer_residual = 2 * outer[-1]
+    fraction = 1.0 if v >= outer_residual else v / outer_residual
+    return (1 - fraction) * amplitudes + fraction * outer, times_s
 
 
 def convolve_shapers(
@@ -200,6 +270,19 @@ def design_zv_shaper(
 ) -> tuple[FloatVector, FloatVector]:
     """Design/convolve ZVs from paired frequencies [Hz] and damping ratios."""
     return _design_shaper(nominal_frequencies_hz, nominal_damping_ratios, zv_shaper)
+
+
+def design_ei_shaper(
+    nominal_frequencies_hz: ArrayLike,
+    nominal_damping_ratios: ArrayLike,
+    residual_tolerance: float = DEFAULT_EI_RESIDUAL_TOLERANCE,
+) -> tuple[FloatVector, FloatVector]:
+    """Design/convolve EI components from paired frequencies [Hz] and damping ratios."""
+    return _design_shaper(
+        nominal_frequencies_hz,
+        nominal_damping_ratios,
+        partial(ei_shaper, residual_tolerance=residual_tolerance),
+    )
 
 
 def _design_shaper(

@@ -2,7 +2,7 @@
 
 import json
 import warnings
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from hashlib import sha256
 from pathlib import Path
 from typing import cast
@@ -12,6 +12,7 @@ import yaml
 from numpy.typing import ArrayLike
 
 from me6404_openarm_shaping.data_types import FloatMatrix, FloatVector
+from me6404_openarm_shaping.input_shaping import DEFAULT_EI_RESIDUAL_TOLERANCE
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config/robot_config.yaml"
 
@@ -49,17 +50,27 @@ class TvistShaperConfig(ShaperSwitch):
 
 
 @dataclass
+class FixedEIConfig(FixedShaperConfig):
+    residual_tolerance: float = DEFAULT_EI_RESIDUAL_TOLERANCE
+
+
+@dataclass
+class TvistEIConfig(TvistShaperConfig):
+    residual_tolerance: float = DEFAULT_EI_RESIDUAL_TOLERANCE
+
+
+@dataclass
 class TimeInvariantShapingConfig:
     zv: FixedShaperConfig
     zvd: FixedShaperConfig
-    ei: ShaperSwitch
+    ei: FixedEIConfig
 
 
 @dataclass
 class TimeVaryingShapingConfig:
     zv: TvistShaperConfig
     zvd: TvistShaperConfig
-    ei: ShaperSwitch
+    ei: TvistEIConfig
 
 
 @dataclass
@@ -78,6 +89,7 @@ class RobotConfig:
     simulation: SimulationConfig
     input_shaping: InputShapingConfig
     simulation_assessment: SimulationAssessmentConfig
+    passive_damping: FloatVector = field(default_factory=lambda: np.full(7, 0.4))
 
 
 def _load_input_shaping(shaping: dict[str, object]) -> InputShapingConfig:
@@ -106,22 +118,28 @@ def _load_input_shaping(shaping: dict[str, object]) -> InputShapingConfig:
             )
         return value
 
-    fixed_ei = enabled(fixed["ei"], "time_invariant.ei")
-    varying_ei = enabled(varying["ei"], "time_varying.ei")
-    if fixed_ei or varying_ei:
-        raise ValueError(
-            "EI shaping is not implemented; leave its enabled flags false."
-        )
+    def residual_tolerance(entry: dict[str, float], name: str) -> float:
+        value = float(entry.get("residual_tolerance", DEFAULT_EI_RESIDUAL_TOLERANCE))
+        if not 0 <= value < 1:
+            raise ValueError(
+                f"input_shaping.{name}.residual_tolerance must be within [0, 1)."
+            )
+        return value
 
     def fixed_settings(kind: str) -> FixedShaperConfig:
         name = f"time_invariant.{kind}"
         entry = cast(dict[str, float], fixed[kind])
-        utilization_min = float(entry["utilization_min"])
+        utilization_min = float(
+            entry.get("utilization_min", 0.3)
+            if kind == "ei"
+            else entry["utilization_min"]
+        )
         if not np.isfinite(utilization_min) or not 0 <= utilization_min <= 1:
             raise ValueError(f"{name}.utilization_min must be within [0, 1].")
-        return FixedShaperConfig(
-            enabled(entry, name), tau_min(entry["tau_min_s"], name), utilization_min
+        cutoff = tau_min(
+            entry.get("tau_min_s", 0.1) if kind == "ei" else entry["tau_min_s"], name
         )
+        return FixedShaperConfig(enabled(entry, name), cutoff, utilization_min)
 
     def tvist_settings(kind: str) -> TvistShaperConfig:
         name = f"time_varying.{kind}"
@@ -137,16 +155,31 @@ def _load_input_shaping(shaping: dict[str, object]) -> InputShapingConfig:
             )
         return settings
 
+    fixed_ei = fixed_settings("ei")
+    varying_ei = tvist_settings("ei")
     return InputShapingConfig(
         time_invariant=TimeInvariantShapingConfig(
             zv=fixed_settings("zv"),
             zvd=fixed_settings("zvd"),
-            ei=ShaperSwitch(fixed_ei),
+            ei=FixedEIConfig(
+                fixed_ei.enabled,
+                fixed_ei.tau_min_s,
+                fixed_ei.utilization_min,
+                residual_tolerance(
+                    cast(dict[str, float], fixed["ei"]), "time_invariant.ei"
+                ),
+            ),
         ),
         time_varying=TimeVaryingShapingConfig(
             zv=tvist_settings("zv"),
             zvd=tvist_settings("zvd"),
-            ei=ShaperSwitch(varying_ei),
+            ei=TvistEIConfig(
+                varying_ei.enabled,
+                varying_ei.tau_min_s,
+                residual_tolerance(
+                    cast(dict[str, float], varying["ei"]), "time_varying.ei"
+                ),
+            ),
         ),
     )
 
@@ -169,11 +202,14 @@ def load_robot_config(
 def parse_robot_config(config: dict[str, object]) -> RobotConfig:
     """Validate an in-memory configuration with the robot YAML schema."""
     arrays: dict[str, FloatVector] = {}
-    for name in ("motor_kp", "motor_kd", "velocity_limits", "acceleration_limits"):
-        values = np.asarray(cast(ArrayLike, config[name]), dtype=np.float64)
+    for name in (
+        "motor_kp", "motor_kd", "velocity_limits", "acceleration_limits", "passive_damping"
+    ):
+        raw = config.get(name, [0.4] * 7) if name == "passive_damping" else config[name]
+        values = np.asarray(cast(ArrayLike, raw), dtype=np.float64)
         if values.shape != (7,) or not np.isfinite(values).all():
             raise ValueError(f"{name} must contain seven finite values.")
-        if name in ("motor_kp", "motor_kd"):
+        if name in ("motor_kp", "motor_kd", "passive_damping"):
             if np.any(values < 0):
                 raise ValueError(f"{name} must be nonnegative.")
         elif np.any(values <= 0):
@@ -216,6 +252,7 @@ def parse_robot_config(config: dict[str, object]) -> RobotConfig:
     return RobotConfig(
         motor_kp=arrays["motor_kp"],
         motor_kd=arrays["motor_kd"],
+        passive_damping=arrays["passive_damping"],
         velocity_limits=arrays["velocity_limits"],
         acceleration_limits=arrays["acceleration_limits"],
         waypoints=waypoints,
@@ -244,6 +281,7 @@ def robot_config_to_dict(config: RobotConfig) -> dict[str, object]:
     return {
         "motor_kp": config.motor_kp.tolist(),
         "motor_kd": config.motor_kd.tolist(),
+        "passive_damping": config.passive_damping.tolist(),
         "velocity_limits": config.velocity_limits.tolist(),
         "acceleration_limits": config.acceleration_limits.tolist(),
         "waypoints": config.waypoints.tolist(),

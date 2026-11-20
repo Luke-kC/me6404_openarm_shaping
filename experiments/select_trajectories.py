@@ -496,7 +496,7 @@ def main() -> None:
     zvd = batch["input_shaping"]["time_invariant"]["zvd"]
     tau_min = float(zvd["tau_min_s"])
     utilization_min = float(zvd["utilization_min"])
-    model = load_model()
+    model = load_model(config.passive_damping)
     model.opt.timestep = config.simulation.dt_s
     limits = np.array([model.joint(name).range for name in LEFT_ARM_JOINT_NAMES])
     rng = np.random.default_rng(SEED)

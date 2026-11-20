@@ -144,7 +144,10 @@ def test_gravitational_stiffness_finite_difference_convergence() -> None:
 @pytest.mark.parametrize("gain_scale", [1.0, 1.2])
 def test_state_matrix_residual(gain_scale: float) -> None:
     """Check assembly for state ordering [delta q; delta qdot]."""
-    model = load_model()
+    passive = np.array([0.02, 0.12, 0.4, 0.4, 0.4, 0.4, 0.4])
+    model = load_model(passive)
+    _, dofs = resolve_joint_indices(model)
+    np.testing.assert_array_equal(model.dof_damping[dofs], passive)
     q = np.array([0, -0.3, 0, 0.012, 0, 0, 0], dtype=np.float64)
 
     M = mass_matrix(model, q)
@@ -156,7 +159,7 @@ def test_state_matrix_residual(gain_scale: float) -> None:
     Kp = np.diag(motor_kp)
     Kd = np.diag(motor_kd)
     Keff = Kp + Kg
-    Deff = Kd + 0.4 * np.eye(7)
+    Deff = Kd + np.diag(passive)
 
     A = state_matrix(model, q, motor_kp, motor_kd)
 

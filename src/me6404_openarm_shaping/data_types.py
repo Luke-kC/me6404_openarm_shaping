@@ -164,7 +164,8 @@ class RunProvenance(TypedDict):
 
 
 class ShaperDesign(TypedDict):
-    type: Literal["zv", "zvd"]
+    type: Literal["zv", "zvd", "ei"]
+    residual_tolerance: NotRequired[float]
     frequency_tolerance: float
     natural_frequencies_hz: list[float]
     damping_ratios: list[float]

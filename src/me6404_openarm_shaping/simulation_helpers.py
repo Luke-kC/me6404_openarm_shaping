@@ -20,6 +20,7 @@ import mujoco.viewer
 import numpy as np
 import yaml
 from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from numpy.typing import NDArray
 
 from me6404_openarm_shaping.configuration import RobotConfig, robot_config_to_dict
@@ -61,11 +62,14 @@ def run_trial(
     *,
     config: RobotConfig,
     headless: bool = False,
+    initial_velocity: FloatVector | None = None,
+    gravity_feedforward_override: FloatMatrix | None = None,
 ) -> TrialRecording:
     """Run one trial with fresh data; headless mode skips rendering and pacing.
 
     Preserve the existing controller:
     PD with zero desired velocity and gravity feedforward based on commanded joint position.
+    Offline calibration may instead supply recorded effort and initial velocity.
 
     Only the selected arm is commanded.
     """
@@ -87,6 +91,8 @@ def run_trial(
 
     torque_limits = model.actuator_forcerange[actuator_indices]
     data.qpos[position_indices] = qi
+    if initial_velocity is not None:
+        data.qvel[velocity_indices] = initial_velocity
     mujoco.mj_forward(model, data)
     contact_events: dict[tuple[int, ...], ContactEvent] = {}
     record_penetrating_contacts(model, data, contact_events, data.time)
@@ -104,12 +110,16 @@ def run_trial(
     step_count = int(np.ceil(simulation_time / model.opt.timestep))
 
     # Feedforward depends only on the known commanded pose, not measured state.
-    gravity_workspace = ModalWorkspace(model)
-    trajectory_gravity = np.empty_like(trajectory["q"])
-    for index, q_command in enumerate(trajectory["q"]):
-        trajectory_gravity[index] = eval_gravity_torques(
-            model, q_command, workspace=gravity_workspace
-        )
+    trajectory_gravity = gravity_feedforward_override
+    if trajectory_gravity is None:
+        gravity_workspace = ModalWorkspace(model)
+        trajectory_gravity = np.empty_like(trajectory["q"])
+        for index, q_command in enumerate(trajectory["q"]):
+            trajectory_gravity[index] = eval_gravity_torques(
+                model, q_command, workspace=gravity_workspace
+            )
+    elif trajectory_gravity.shape != trajectory["q"].shape:
+        raise ValueError("Feedforward replay must have the same shape as the command.")
 
     viewer_context = (
         nullcontext() if headless else mujoco.viewer.launch_passive(model, data)
@@ -434,7 +444,7 @@ def _plot_joint_panels(
     series: Sequence[tuple[str, FloatVector, FloatMatrix, str, str]],
     title: str,
     ylabel: str,
-) -> None:
+) -> Figure:
     """Plot (label, time, values, color, linestyle) series, one panel per joint."""
     fig, axes = plt.subplots(4, 2, sharex=True, figsize=(12, 10), num=title)
     panels = cast(Sequence[Axes], axes.flat)
@@ -461,19 +471,45 @@ def _plot_joint_panels(
     fig.suptitle(title)
     fig.supxlabel("Time [s]")
     fig.tight_layout()
+    return fig
+
+
+_TRIAL_COLORS = {
+    "baseline": "tab:blue",
+    "time_invariant_zv": "tab:red",
+    "time_invariant_zvd": "tab:orange",
+    "tvist_zv": "tab:purple",
+    "tvist_zvd": "tab:green",
+    "time_invariant_ei": "tab:brown",
+    "tvist_ei": "tab:pink",
+}
+
+
+def save_joint_position_plot(
+    recordings: dict[str, TrialRecording], path: Path, *, trajectory_id: str
+) -> None:
+    """Save one grid of measured joint positions and release the figure."""
+    series = [
+        (label, trial["t"], trial["q"], _TRIAL_COLORS[label], "-")
+        for label, trial in recordings.items()
+        if len(trial["t"])
+    ]
+    if not series:
+        return
+    fig = _plot_joint_panels(
+        series, f"{trajectory_id}: Recorded position", "Position [rad]"
+    )
+    try:
+        fig.savefig(path, dpi=150)
+    finally:
+        plt.close(fig)
 
 
 def plot_comparison(
     trajectories: dict[str, JointTrajectory], recordings: dict[str, TrialRecording]
 ) -> None:
     """Build commanded and recorded comparisons without launching a viewer."""
-    colors = {
-        "baseline": "tab:blue",
-        "time_invariant_zv": "tab:red",
-        "time_invariant_zvd": "tab:orange",
-        "tvist_zv": "tab:purple",
-        "tvist_zvd": "tab:green",
-    }
+    colors = _TRIAL_COLORS
     quantities: tuple[tuple[Literal["q", "dq", "ddq"], str, str], ...] = (
         ("q", "Commanded position", "Position [rad]"),
         ("dq", "Commanded velocity", "Velocity [rad/s]"),

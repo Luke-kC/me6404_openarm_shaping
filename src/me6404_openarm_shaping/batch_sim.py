@@ -24,6 +24,7 @@ from me6404_openarm_shaping.robot_sim import simulate
 from me6404_openarm_shaping.simulation_helpers import (
     capture_run_provenance,
     save_experiment,
+    save_joint_position_plot,
 )
 
 DEFAULT_BATCH_CONFIG = Path(__file__).resolve().parents[2] / "config" / "batch_sim.yaml"
@@ -70,6 +71,11 @@ def main() -> None:
         help="save per-trajectory CSVs, metadata, and summary.csv in a new batch folder",
     )
     parser.add_argument(
+        "--save-plots",
+        action="store_true",
+        help="save one measured joint-position grid PNG per trajectory",
+    )
+    parser.add_argument(
         "--headless",
         action="store_true",
         help="skip the MuJoCo viewer and real-time pacing; no interactive plots",
@@ -81,7 +87,7 @@ def main() -> None:
     batch_dir = None
     summary_stream = None
     with ExitStack() as stack:
-        if provenance is not None:
+        if args.save_csv or args.save_plots:
             output_dir.mkdir(parents=True, exist_ok=True)
             batch_dir = Path(mkdtemp(prefix="batch_", dir=output_dir))
             print(f"Saving batch results to {batch_dir}")
@@ -89,6 +95,7 @@ def main() -> None:
             (batch_dir / "trajectory_suite.yaml").write_text(
                 yaml.safe_dump(suite, sort_keys=False), encoding="utf-8"
             )
+        if batch_dir is not None and args.save_csv:
             summary_stream = stack.enter_context(
                 (batch_dir / "summary.csv").open("x", newline="", encoding="utf-8")
             )
@@ -147,10 +154,16 @@ def main() -> None:
                         ]
                     )
                 summary_stream.flush()
+            if batch_dir is not None and args.save_plots:
+                save_joint_position_plot(
+                    result.recordings,
+                    batch_dir / f"{name}_joint_positions.png",
+                    trajectory_id=name,
+                )
             if any(not trial["completed"] for trial in result.recordings.values()):
                 print("Batch stopped early.")
                 break
-    if batch_dir is not None:
+    if batch_dir is not None and args.save_csv:
         print(f"Batch summary: {batch_dir / 'summary.csv'}")
 
 

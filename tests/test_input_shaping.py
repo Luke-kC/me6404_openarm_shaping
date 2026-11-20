@@ -6,13 +6,55 @@ import pytest
 from me6404_openarm_shaping.data_types import ModalSample
 from me6404_openarm_shaping.input_shaping import (
     convolve_shapers,
+    design_ei_shaper,
     design_zv_shaper,
     design_zvd_shaper,
+    ei_frequency_tolerance,
+    ei_shaper,
     residual_vibration_factor,
     suggest_shaper_parameters,
     zv_shaper,
     zvd_shaper,
 )
+
+
+@pytest.mark.parametrize("zeta", [0.0, 0.1, 0.2, 0.3])
+def test_ei_nominal_residual_and_zvd_limit(zeta: float) -> None:
+    omega = 2 * np.pi
+    a, t = ei_shaper(omega, zeta)
+    assert np.all(a >= 0)
+    assert a.sum() == pytest.approx(1.0)
+    assert residual_vibration_factor(a, t, omega, zeta) == pytest.approx(
+        0.05, abs=0.003
+    )
+    for scale in (0.93, 1.07):
+        assert residual_vibration_factor(a, t, scale * omega, zeta) < 0.05
+    np.testing.assert_array_equal(ei_shaper(omega, zeta, 0), zvd_shaper(omega, zeta))
+    if zeta:
+        assert t[1] > t[-1] / 2
+
+
+def test_multimode_ei_and_undamped_band() -> None:
+    a, t = ei_shaper(2 * np.pi, 0)
+    np.testing.assert_allclose(a, [0.2625, 0.475, 0.2625])
+    np.testing.assert_allclose(t, [0, 0.5, 1])
+    assert ei_frequency_tolerance(0.05) == 0.20
+    for scale in (0.8, 1.2):
+        assert residual_vibration_factor(a, t, scale * 2 * np.pi, 0) == pytest.approx(
+            0.05, abs=0.0003
+        )
+    actual = design_ei_shaper([1, 2], [0, 0.1], residual_tolerance=0.03)
+    expected = convolve_shapers(
+        *ei_shaper(2 * np.pi, 0, 0.03), *ei_shaper(4 * np.pi, 0.1, 0.03)
+    )
+    np.testing.assert_array_equal(actual, expected)
+
+
+def test_ei_high_damping_stays_below_nominal_target() -> None:
+    a, t = ei_shaper(2 * np.pi, 0.62)
+    assert np.all(a >= 0)
+    assert a.sum() == pytest.approx(1.0)
+    assert 0 < residual_vibration_factor(a, t, 2 * np.pi, 0.62) < 0.05
 
 
 def test_undamped_zvd() -> None:

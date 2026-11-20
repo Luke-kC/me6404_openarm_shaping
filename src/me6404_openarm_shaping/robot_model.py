@@ -26,8 +26,11 @@ FINGER_JOINT_NAMES = (
 )
 
 
-def load_model() -> mujoco.MjModel:
-    return mujoco.MjModel.from_xml_path(str(MODEL_PATH))
+def load_model(passive_damping: ArrayLike | None = None) -> mujoco.MjModel:
+    model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
+    if passive_damping is not None:
+        set_passive_damping(model, passive_damping)
+    return model
 
 
 def check_joint_configuration(model: mujoco.MjModel, q: ArrayLike) -> None:
@@ -58,6 +61,12 @@ def resolve_joint_indices(
         np.array(model.jnt_qposadr[joint_ids], dtype=np.intp),
         np.array(model.jnt_dofadr[joint_ids], dtype=np.intp),
     )
+
+
+def set_passive_damping(model: mujoco.MjModel, damping: ArrayLike) -> None:
+    """Set linear viscous damping on the left arm only, in J1–J7 order."""
+    _, dofs = resolve_joint_indices(model)
+    model.dof_damping[dofs] = damping
 
 
 def nominal_configuration(model: mujoco.MjModel) -> FloatVector:
@@ -147,7 +156,6 @@ def gravitational_stiffness(
         if workspace is not None
         else resolve_joint_indices(model)[0]
     )
-
     n = len(position_indices)
     Kg = np.zeros((n, n))
 
@@ -176,13 +184,13 @@ def state_matrix(
 ) -> FloatMatrix:
     if workspace is not None and workspace.model is not model:
         raise ValueError("Modal workspace must belong to the supplied model.")
-    position_indices = (
-        workspace.position_indices
+    velocity_indices = (
+        workspace.velocity_indices
         if workspace is not None
-        else resolve_joint_indices(model)[0]
+        else resolve_joint_indices(model)[1]
     )
 
-    n = len(position_indices)
+    n = len(velocity_indices)
 
     A1 = np.zeros((n, n))
     A2 = np.identity(n)
@@ -193,9 +201,7 @@ def state_matrix(
 
     Keff = np.diag(motor_kp) + Kg
 
-    passive_damping = 0.4
-
-    Deff = np.diag(motor_kd) + passive_damping * np.identity(n)
+    Deff = np.diag(np.asarray(motor_kd) + model.dof_damping[velocity_indices])
 
     A3 = -np.linalg.solve(M, Keff)
     A4 = -np.linalg.solve(M, Deff)

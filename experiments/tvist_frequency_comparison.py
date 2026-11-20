@@ -24,7 +24,7 @@ def compare_frequencies(
     if iterations < 1:
         raise ValueError("At least one shaping pass is required.")
     print("Loading model and generating the unshaped trajectory...", flush=True)
-    model = load_model()
+    model = load_model(config.passive_damping)
     dt = model.opt.timestep = config.simulation.dt_s
     t_unshaped, q_unshaped, _, _ = waypoint_trajectory(
         config.waypoints,

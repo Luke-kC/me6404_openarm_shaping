@@ -1,5 +1,6 @@
 import argparse
 from dataclasses import dataclass
+from functools import partial
 from hashlib import sha256
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from numpy.typing import NDArray
 
 from me6404_openarm_shaping.configuration import (
     RobotConfig,
+    TvistEIConfig,
     experiment_fingerprint,
     load_robot_config,
 )
@@ -25,8 +27,10 @@ from me6404_openarm_shaping.data_types import (
 from me6404_openarm_shaping.input_shaping import (
     ZV_FREQUENCY_TOLERANCE,
     ZVD_FREQUENCY_TOLERANCE,
+    design_ei_shaper,
     design_zv_shaper,
     design_zvd_shaper,
+    ei_frequency_tolerance,
     suggest_shaper_parameters,
 )
 from me6404_openarm_shaping.robot_model import (
@@ -36,6 +40,7 @@ from me6404_openarm_shaping.robot_model import (
     check_joint_configuration,
     load_model,
     modal_properties,
+    set_passive_damping,
 )
 from me6404_openarm_shaping.simulation_helpers import (
     capture_run_provenance,
@@ -76,6 +81,7 @@ def simulate(
     shaping = config.input_shaping
 
     model.opt.timestep = simulation.dt_s
+    set_passive_damping(model, config.passive_damping)
 
     simulation_time: float = simulation.minimum_duration_s
 
@@ -101,12 +107,22 @@ def simulate(
     fixed_shapers = (
         ("zv", shaping.time_invariant.zv, ZV_FREQUENCY_TOLERANCE, design_zv_shaper),
         ("zvd", shaping.time_invariant.zvd, ZVD_FREQUENCY_TOLERANCE, design_zvd_shaper),
+        (
+            "ei",
+            shaping.time_invariant.ei,
+            ei_frequency_tolerance(shaping.time_invariant.ei.residual_tolerance),
+            partial(
+                design_ei_shaper,
+                residual_tolerance=shaping.time_invariant.ei.residual_tolerance,
+            ),
+        ),
     )
     tvist_shapers = [
         (kind, settings)
         for kind, settings in (
             (TvistShaper.ZV, shaping.time_varying.zv),
             (TvistShaper.ZVD, shaping.time_varying.zvd),
+            (TvistShaper.EI, shaping.time_varying.ei),
         )
         if settings.enabled
     ]
@@ -155,6 +171,10 @@ def simulate(
             "rounded_delay_steps": delay_steps.tolist(),
             "applied_delays_s": (delay_steps * model.opt.timestep).tolist(),
         }
+        if kind == "ei":
+            shaper_designs[label]["residual_tolerance"] = (
+                shaping.time_invariant.ei.residual_tolerance
+            )
         t_shaped: FloatVector
         q_shaped: FloatMatrix
         dq_shaped: FloatMatrix
@@ -173,7 +193,15 @@ def simulate(
     for shaper, settings in tvist_shapers:
         label = f"tvist_{shaper.value.lower()}"
         schedule = select_tvist_modes(properties, settings.tau_min_s)
-        q_tvist: FloatMatrix = apply_tvist_to_joint_trajectory(
+        apply = (
+            partial(
+                apply_tvist_to_joint_trajectory,
+                residual_tolerance=settings.residual_tolerance,
+            )
+            if isinstance(settings, TvistEIConfig)
+            else apply_tvist_to_joint_trajectory
+        )
+        q_tvist = apply(
             q=q, dt=dt, properties=schedule, shaper_type=shaper, lagrange_order=1
         )
         # The filter holds the last modal sample throughout its appended tail.

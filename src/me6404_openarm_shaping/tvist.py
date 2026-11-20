@@ -1,4 +1,5 @@
 from enum import StrEnum
+from functools import partial
 from math import modf
 from typing import Literal
 
@@ -12,7 +13,9 @@ from me6404_openarm_shaping.data_types import (
     ModalProperties,
 )
 from me6404_openarm_shaping.input_shaping import (
+    DEFAULT_EI_RESIDUAL_TOLERANCE,
     convolve_shapers,
+    ei_shaper,
     zv_shaper,
     zvd_shaper,
 )
@@ -22,6 +25,7 @@ from me6404_openarm_shaping.robot_model import LEFT_ARM_JOINT_NAMES
 class TvistShaper(StrEnum):
     ZV = "ZV"
     ZVD = "ZVD"
+    EI = "EI"
 
 
 def select_tvist_modes(
@@ -124,22 +128,26 @@ def apply_tvist_to_joint_trajectory(
     properties: list[ModalProperties],
     shaper_type: TvistShaper,
     lagrange_order: Literal[1, 2, 3] = 1,
-):
+    *,
+    residual_tolerance: float = DEFAULT_EI_RESIDUAL_TOLERANCE,
+) -> FloatMatrix:
     q_array: FloatMatrix = np.asarray(q, dtype=np.float64)
     curr_history: FloatMatrix
+    design_mode = {
+        TvistShaper.ZV: zv_shaper,
+        TvistShaper.ZVD: zvd_shaper,
+        TvistShaper.EI: partial(
+            ei_shaper, residual_tolerance=residual_tolerance, use_polynomial_fit=False
+        ),
+    }[shaper_type]
 
     last_natural_frequencies = properties[-1]["natural_frequency_hz"]
     last_zetas = properties[-1]["damping_ratio"]
 
     # Determine how much to extend the input trajectory based on shaper
     delta_max_final: float = 0.0
-    for index, (last_natural_frequency, last_zeta) in enumerate(
-        zip(last_natural_frequencies, last_zetas, strict=True)
-    ):
-        if shaper_type == TvistShaper.ZV:
-            _, next_times = zv_shaper(2 * np.pi * last_natural_frequency, last_zeta)
-        else:
-            _, next_times = zvd_shaper(2 * np.pi * last_natural_frequency, last_zeta)
+    for frequency, zeta in zip(last_natural_frequencies, last_zetas, strict=True):
+        _, next_times = design_mode(2 * np.pi * frequency, zeta)
 
         delta_max_final += float(np.max(next_times))
 
@@ -173,10 +181,7 @@ def apply_tvist_to_joint_trajectory(
         for index, (frequency_hz, zeta) in enumerate(
             zip(natural_frequencies_hz, damping_ratios, strict=True)
         ):
-            if shaper_type == TvistShaper.ZV:
-                next_amplitudes, next_times = zv_shaper(2 * np.pi * frequency_hz, zeta)
-            else:
-                next_amplitudes, next_times = zvd_shaper(2 * np.pi * frequency_hz, zeta)
+            next_amplitudes, next_times = design_mode(2 * np.pi * frequency_hz, zeta)
 
             if index == 0:
                 amplitudes, times_s = next_amplitudes, next_times

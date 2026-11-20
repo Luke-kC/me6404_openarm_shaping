@@ -25,6 +25,7 @@ def test_load_robot_config(tmp_path: Path) -> None:
     path.write_text(
         "motor_kp: [1, 2, 3, 4, 5, 6, 7]\n"
         "motor_kd: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]\n"
+        "passive_damping: [0, 0.2, 0.4, 0.4, 0.4, 0.4, 0.4]\n"
         "velocity_limits: [1, 2, 3, 4, 5, 6, 7]\n"
         "acceleration_limits: [2, 4, 6, 8, 10, 12, 14]\n"
         "waypoints: [[0, 0, 0, 0, 0, 0, 0], [0.1, -0.2, 0, 0.3, 0, 0, 0]]\n"
@@ -34,11 +35,11 @@ def test_load_robot_config(tmp_path: Path) -> None:
         "  time_invariant:\n"
         "    zv: {enabled: true, tau_min_s: 0.1, utilization_min: 0.3}\n"
         "    zvd: {enabled: false, tau_min_s: 0.2, utilization_min: 0.4}\n"
-        "    ei: {enabled: false}\n"
+        "    ei: {enabled: false, tau_min_s: 0.1, utilization_min: 0.3, residual_tolerance: 0.05}\n"
         "  time_varying:\n"
         "    zv: {enabled: true, tau_min_s: 0}\n"
         "    zvd: {enabled: false, tau_min_s: 0.15}\n"
-        "    ei: {enabled: false}\n"
+        "    ei: {enabled: false, tau_min_s: 0, residual_tolerance: 0.05}\n"
     )
     with pytest.warns(
         UserWarning, match=r"time_varying\.zvd\.tau_min_s.*commanded acceleration spikes"
@@ -47,6 +48,7 @@ def test_load_robot_config(tmp_path: Path) -> None:
     assert len(caught) == 1
     assert isinstance(config, RobotConfig)
     kp, kd = config.motor_kp, config.motor_kd
+    np.testing.assert_array_equal(config.passive_damping, [0, 0.2, 0.4, 0.4, 0.4, 0.4, 0.4])
     for values in (kp, kd, config.velocity_limits, config.acceleration_limits, config.waypoints):
         assert values.dtype == np.float64
     np.testing.assert_allclose(kp, [1, 2, 3, 4, 5, 6, 7], rtol=0, atol=1e-14)
@@ -136,12 +138,19 @@ def test_reject_invalid_experiment_settings(tmp_path: Path, case: str) -> None:
 
 
 @pytest.mark.parametrize("group", ["time_invariant", "time_varying"])
-def test_reject_enabled_ei(tmp_path: Path, group: str) -> None:
+def test_enabled_ei_tolerance(tmp_path: Path, group: str) -> None:
     config = yaml.safe_load(DEFAULT_CONFIG_PATH.read_text())
-    config["input_shaping"][group]["ei"]["enabled"] = True
+    ei = config["input_shaping"][group]["ei"]
+    ei["enabled"] = True
+    del ei["residual_tolerance"]
     path = tmp_path / "robot.yaml"
     path.write_text(yaml.safe_dump(config))
-    with pytest.raises(ValueError, match="EI shaping is not implemented"):
+    settings = getattr(load_robot_config(path).input_shaping, group).ei
+    assert settings.enabled
+    assert settings.residual_tolerance == 0.05
+    ei["residual_tolerance"] = 1.0
+    path.write_text(yaml.safe_dump(config))
+    with pytest.raises(ValueError, match="residual_tolerance"):
         load_robot_config(path)
 
 

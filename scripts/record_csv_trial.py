@@ -6,6 +6,7 @@ import csv
 import json
 import math
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -48,6 +49,8 @@ def copy_inputs(
     csv_path: Path, output_root: Path, selection: str
 ) -> tuple[Path, Path, float]:
     """Snapshot both inputs without renaming files referenced by metadata."""
+    if re.fullmatch(r"[A-Za-z0-9_-]+", selection) is None:
+        raise ValueError("Trajectory labels must use only letters, digits, _ or -.")
     metadata_path = csv_path.with_name(
         csv_path.name.removesuffix("_results.csv") + "_metadata.yaml"
     )
@@ -59,12 +62,27 @@ def copy_inputs(
     run_dir = Path(mkdtemp(prefix=prefix, dir=trial_root))
     saved_csv = Path(shutil.copy2(csv_path, run_dir))
     shutil.copy2(metadata_path, run_dir)
+    labels: set[str] = set()
+    times: list[float] = []
     with saved_csv.open(newline="") as stream:
-        times = [
-            float(row["time_s"])
-            for row in csv.DictReader(stream)
-            if row["trajectory"] == selection
-        ]
+        reader = csv.DictReader(stream)
+        if reader.fieldnames is None or not {"trajectory", "time_s"}.issubset(
+            reader.fieldnames
+        ):
+            raise ValueError("CSV must contain trajectory and time_s columns.")
+        for row in reader:
+            label = row["trajectory"]
+            if label is not None and label != "":
+                labels.add(label)
+            if label == selection:
+                times.append(float(row["time_s"]))
+    if selection not in labels:
+        available = (
+            ", ".join(map(repr, sorted(labels))) if len(labels) > 0 else "(none)"
+        )
+        raise ValueError(
+            f"Unknown trajectory {selection!r}. Available CSV labels: {available}."
+        )
     if len(times) < 2 or not all(math.isfinite(t) and t >= 0 for t in times):
         raise ValueError(
             "Selected CSV trial needs at least two finite nonnegative times."
@@ -250,7 +268,9 @@ def record_trial(args: argparse.Namespace) -> Path:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--csv", type=Path, required=True)
-    parser.add_argument("--trajectory", choices=("shaped", "unshaped"), required=True)
+    parser.add_argument(
+        "--trajectory", required=True, help="Exact CSV trajectory label."
+    )
     parser.add_argument("--gravity-scale", type=float, required=True)
     parser.add_argument("--output-dir", type=Path, default=ROOT / "hardware_out")
     parser.add_argument("--post-roll", type=float, default=2.0)

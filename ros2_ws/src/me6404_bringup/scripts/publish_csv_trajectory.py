@@ -54,10 +54,25 @@ def load_trajectory(
     """Read commands, not measured motion or total PD torque; never publish."""
     if not math.isfinite(gravity_scale) or not 0.0 <= gravity_scale <= 1.0:
         raise ValueError("--gravity-scale must be finite and within [0, 1].")
-    if selection not in ("shaped", "unshaped"):
-        raise ValueError("--trajectory must be shaped or unshaped.")
+    labels: set[str] = set()
+    rows: list[dict[str, str]] = []
     with csv_path.open(newline="") as stream:
-        rows = [row for row in csv.DictReader(stream) if row["trajectory"] == selection]
+        reader = csv.DictReader(stream)
+        if reader.fieldnames is None or "trajectory" not in reader.fieldnames:
+            raise ValueError("CSV must contain a trajectory column.")
+        for row in reader:
+            label = row["trajectory"]
+            if label is not None and label != "":
+                labels.add(label)
+            if label == selection:
+                rows.append(row)
+    if selection not in labels:
+        available = (
+            ", ".join(map(repr, sorted(labels))) if len(labels) > 0 else "(none)"
+        )
+        raise ValueError(
+            f"Unknown trajectory {selection!r}. Available CSV labels: {available}."
+        )
     if len(rows) < 2:
         raise ValueError(
             f"CSV has no usable {selection} trial (need at least two rows)."
@@ -275,7 +290,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--csv", type=Path, required=True)
     parser.add_argument("--gravity-scale", type=float, required=True)
-    parser.add_argument("--trajectory", choices=("shaped", "unshaped"), required=True)
+    parser.add_argument(
+        "--trajectory", required=True, help="Exact CSV trajectory label."
+    )
     args, ros_args = parser.parse_known_args()
     try:
         message = load_trajectory(args.csv, args.gravity_scale, args.trajectory)

@@ -36,6 +36,7 @@ def inputs(tmp_path: Path) -> argparse.Namespace:
     csv_path = source / "sim_results.csv"
     csv_path.write_text(
         "trajectory,time_s\nunshaped,0\nshaped,0\nunshaped,0.001\nshaped,0.002\n"
+        "baseline,0\nbaseline,0.003\ntvist_zvd,0\ntvist_zvd,0.004\n"
     )
     (source / "sim_metadata.yaml").write_text("results_file: sim_results.csv\n")
     return argparse.Namespace(
@@ -48,9 +49,12 @@ def inputs(tmp_path: Path) -> argparse.Namespace:
     )
 
 
-@pytest.mark.parametrize("selection", ["shaped", "unshaped"])
+@pytest.mark.parametrize(
+    ("selection", "expected_duration"),
+    [("unshaped", 0.001), ("shaped", 0.002), ("baseline", 0.003), ("tvist_zvd", 0.004)],
+)
 def test_copies_and_unique_directories(
-    wrapper: ModuleType, tmp_path: Path, selection: str
+    wrapper: ModuleType, tmp_path: Path, selection: str, expected_duration: float
 ) -> None:
     args = inputs(tmp_path)
     args.trajectory = selection
@@ -60,12 +64,36 @@ def test_copies_and_unique_directories(
     second, _, _ = wrapper.copy_inputs(args.csv, args.output_dir, args.trajectory)
     assert first != second
     assert first.parent == second.parent == args.output_dir / selection
-    assert duration == (0.002 if selection == "shaped" else 0.001)
+    assert duration == expected_duration
     assert copied.read_bytes() == args.csv.read_bytes()
     assert (first / "sim_metadata.yaml").read_bytes() == (
         args.csv.parent / "sim_metadata.yaml"
     ).read_bytes()
     assert copied.name == args.csv.name
+
+
+@pytest.mark.parametrize(
+    ("selection", "reason"),
+    [
+        ("tvist_ZVD", "Available CSV labels:.*'baseline'.*'tvist_zvd'"),
+        ("../tvist_zvd", "Trajectory labels must use only"),
+    ],
+)
+def test_invalid_label_does_not_start_recording(
+    wrapper: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    selection: str,
+    reason: str,
+) -> None:
+    args = inputs(tmp_path)
+    args.trajectory = selection
+    popen = MagicMock()
+    monkeypatch.setattr(wrapper.subprocess, "Popen", popen)
+    with pytest.raises(ValueError, match=reason):
+        wrapper.record_trial(args)
+    popen.assert_not_called()
+    assert not (tmp_path / "tvist_zvd").exists()
 
 
 def test_record_before_publish_and_finalize(
@@ -99,18 +127,38 @@ def test_record_before_publish_and_finalize(
     monkeypatch.setattr(wrapper, "wait_for_recorder", ready)
     kill = MagicMock()
     monkeypatch.setattr(wrapper.os, "killpg", kill)
-    folder = wrapper.record_trial(args)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "record_csv_trial.py",
+            "--csv",
+            str(args.csv),
+            "--trajectory",
+            "tvist_zvd",
+            "--output-dir",
+            str(args.output_dir),
+            "--gravity-scale",
+            "0.5",
+            "--post-roll",
+            "0",
+        ],
+    )
+    wrapper.main()
+    folder = next((args.output_dir / "tvist_zvd").iterdir())
     assert events == ["record", "ready", "publish"]
     assert commands[0][commands[0].index("--storage") + 1] == "mcap"
     assert "--include-unpublished-topics" in commands[0]
     assert "--include-hidden-topics" in commands[0]
     assert str(folder / "sim_results.csv") in commands[1]
+    assert commands[1][commands[1].index("--trajectory") + 1] == "tvist_zvd"
     assert commands[1][-2:] == ["--gravity-scale", "0.5"]
     kill.assert_called_once_with(1234, signal.SIGINT)
     recorder.wait.assert_called_once_with(timeout=15)
     manifest = json.loads((folder / "trial.json").read_text())
     assert manifest["status"] == "recording_window_finished"
-    assert manifest["trajectory_duration_s"] == 0.002
+    assert manifest["trajectory"] == "tvist_zvd"
+    assert manifest["trajectory_duration_s"] == 0.004
     assert "/joint_states" in manifest["topics_requested"]
     assert wrapper.COMMAND_RECORD_TOPIC in manifest["topics_requested"]
     assert f"{wrapper.ACTION}/_action/feedback" in manifest["topics_requested"]

@@ -10,6 +10,14 @@ from types import ModuleType
 import pytest
 import yaml
 
+TRIAL_POSITIONS = {
+    "unshaped": 0.1,
+    "shaped": 0.05,
+    "baseline": 0.12,
+    "time_invariant_zvd": 0.08,
+    "tvist_zvd": 0.04,
+}
+
 
 @pytest.fixture(scope="module")
 def replay() -> ModuleType:
@@ -26,16 +34,14 @@ def replay() -> ModuleType:
 
 
 def write_trial(
-    root: Path, replay: ModuleType, *, shaped: bool = True
+    root: Path, replay: ModuleType, *, labels: tuple[str, ...] = tuple(TRIAL_POSITIONS)
 ) -> tuple[Path, list[dict[str, str]]]:
     rows: list[dict[str, str]] = []
-    for label in ("unshaped", "shaped") if shaped else ("unshaped",):
+    for label in labels:
         for index in range(3):
             row = {"trajectory": label, "time_s": str(index * 0.1)}
             for joint in range(1, 8):
-                row[f"J{joint}_q_command_rad"] = (
-                    "0.1" if label == "unshaped" else "0.05"
-                )
+                row[f"J{joint}_q_command_rad"] = str(TRIAL_POSITIONS[label])
                 row[f"J{joint}_q_rad"] = "999"  # Must never replay measured motion.
                 row[f"J{joint}_torque_requested_Nm"] = "999"
                 row[f"J{joint}_torque_feedback_Nm"] = "999"
@@ -62,7 +68,7 @@ def write_trial(
                 "samples": 3,
                 "simulation_checks": {"passing": True},
             }
-            for label in {row["trajectory"] for row in rows}
+            for label in labels
         },
     }
     (root / "run_metadata.yaml").write_text(yaml.safe_dump(metadata))
@@ -76,7 +82,7 @@ def write_rows(path: Path, rows: list[dict[str, str]]) -> None:
         writer.writerows(rows)
 
 
-@pytest.mark.parametrize("selection", ["unshaped", "shaped"])
+@pytest.mark.parametrize("selection", list(TRIAL_POSITIONS))
 @pytest.mark.parametrize("scale", [0.0, 0.5, 1.0])
 def test_message_mapping(
     tmp_path: Path, replay: ModuleType, selection: str, scale: float
@@ -86,17 +92,19 @@ def test_message_mapping(
     assert list(message.joint_names) == replay.JOINT_NAMES
     assert len(message.points) == 3
     for index, point in enumerate(message.points):
-        assert list(point.positions) == [0.1 if selection == "unshaped" else 0.05] * 7
+        assert list(point.positions) == [TRIAL_POSITIONS[selection]] * 7
         assert list(point.effort) == [scale * joint * 0.5 for joint in range(1, 8)]
         assert len(point.velocities) == len(point.accelerations) == 0
         assert point.time_from_start.sec == 0
         assert point.time_from_start.nanosec == index * 100_000_000
 
 
-def test_missing_shaped_does_not_fall_back(tmp_path: Path, replay: ModuleType) -> None:
-    path, _ = write_trial(tmp_path, replay, shaped=False)
-    with pytest.raises(ValueError, match="no usable shaped"):
-        replay.load_trajectory(path, 1.0, "shaped")
+def test_unknown_label_does_not_fall_back(tmp_path: Path, replay: ModuleType) -> None:
+    path, _ = write_trial(tmp_path, replay, labels=("baseline", "tvist_zvd"))
+    with pytest.raises(
+        ValueError, match="Available CSV labels: 'baseline', 'tvist_zvd'"
+    ):
+        replay.load_trajectory(path, 1.0, "tvist_ZVD")
 
 
 @pytest.mark.parametrize("scale", [-0.01, 1.01, math.nan, math.inf])
@@ -142,7 +150,7 @@ def test_requires_matching_passing_metadata(
         metadata_path.unlink()
     else:
         metadata = yaml.safe_load(metadata_path.read_text())
-        trial = metadata["trials"]["unshaped"]
+        trial = metadata["trials"]["tvist_zvd"]
         if failure == "failed":
             trial["simulation_checks"]["passing"] = False
         elif failure == "incomplete":
@@ -153,7 +161,7 @@ def test_requires_matching_passing_metadata(
             metadata["joint_order"].reverse()
         metadata_path.write_text(yaml.safe_dump(metadata))
     with pytest.raises((ValueError, FileNotFoundError)):
-        replay.load_trajectory(path, 1.0, "unshaped")
+        replay.load_trajectory(path, 1.0, "tvist_zvd")
 
 
 def test_start_state_checks(replay: ModuleType) -> None:
@@ -237,7 +245,7 @@ def test_cancel_does_not_initialize_ros(
             "--gravity-scale",
             "1",
             "--trajectory",
-            "unshaped",
+            "tvist_zvd",
         ],
     )
     monkeypatch.setattr("builtins.input", lambda _: "NO")
@@ -246,6 +254,7 @@ def test_cancel_does_not_initialize_ros(
     )
     replay.main()
     prompt = capsys.readouterr().out
+    assert "tvist_zvd" in prompt
     assert "visually confirm the arm is stationary" in prompt
     assert "within ±0.1 rad of the CSV starting pose" in prompt
     assert "speed is NOT checked automatically" in prompt

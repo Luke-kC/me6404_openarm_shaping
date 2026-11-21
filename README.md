@@ -132,15 +132,22 @@ running with the trajectory controller:
 
 ```bash
 python3 scripts/record_csv_trial.py \
-  --csv sim_out/<run>/<run>_results.csv \
-  --trajectory unshaped --gravity-scale 1.0
+  --csv sim_out/<batch>/<run>/<run>_results.csv \
+  --trajectory tvist_zvd --gravity-scale 1.0
 ```
+
+For batch results, use `trial` as the exact `--trajectory` label and resolve
+`results_csv` relative to the batch's `summary.csv` directory. Use the results
+CSV itself, not `summary.csv`. Labels such as `baseline`, `time_invariant_zvd`,
+and `tvist_zvd` are selectable when present, as are legacy `unshaped` and
+`shaped` labels. Only the selected trial's simulation checks count; a passing
+simulation does not replace separate authorization for the physical trial.
 
 `gravity-scale` is a simple scalar that can be used to reduce the magnitude of the gravity feed-forward torque.
 
 This wrapper does not launch bringup or enable motors.
 
-Each run creates `hardware_out/<shaped|unshaped>/run_<timestamp>_<unique>/` containing
+Each run creates `hardware_out/<trajectory-label>/run_<timestamp>_<unique>/` containing
 the original-named CSV and simulation metadata, `trial.json` (arguments, requested
 topics and outcome), recorder QoS settings/log, and `bag/` with MCAP and rosbag
 metadata. The MCAP storage plugin must already be installed.

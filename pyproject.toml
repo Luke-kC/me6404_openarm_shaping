@@ -8,9 +8,11 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "marimo[recommended]>=0.25.2",
     "matplotlib>=3.11.2",
     "mujoco>=4.0.1",
     "numpy>=2.5.4",
+    "pyrefly>=0.60.0",
     "pyyaml>=6.0.3",
 ]
 

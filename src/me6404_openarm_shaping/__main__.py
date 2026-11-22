@@ -34,7 +34,7 @@ def main() -> None:
 
     try:
         config = load_robot_config()
-        model = load_model(config.passive_damping)
+        model = load_model(config.passive_damping, added_armature=config.added_armature)
         motor_kp, motor_kd = config.motor_kp, config.motor_kd
 
         check_joint_configuration(model, args.q)

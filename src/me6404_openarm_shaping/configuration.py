@@ -71,6 +71,7 @@ class TimeVaryingShapingConfig:
     zv: TvistShaperConfig
     zvd: TvistShaperConfig
     ei: TvistEIConfig
+    experimental: bool = False
 
 
 @dataclass
@@ -90,6 +91,17 @@ class RobotConfig:
     input_shaping: InputShapingConfig
     simulation_assessment: SimulationAssessmentConfig
     passive_damping: FloatVector = field(default_factory=lambda: np.full(7, 0.4))
+    added_armature: FloatVector = field(default_factory=lambda: np.zeros(7))
+    absolute_velocity_limits: FloatVector | None = None
+    absolute_acceleration_limits: FloatVector | None = None
+
+    @property
+    def velocity_ceiling(self) -> FloatVector:
+        return self.velocity_limits if self.absolute_velocity_limits is None else self.absolute_velocity_limits
+
+    @property
+    def acceleration_ceiling(self) -> FloatVector:
+        return self.acceleration_limits if self.absolute_acceleration_limits is None else self.absolute_acceleration_limits
 
 
 def _load_input_shaping(shaping: dict[str, object]) -> InputShapingConfig:
@@ -97,12 +109,16 @@ def _load_input_shaping(shaping: dict[str, object]) -> InputShapingConfig:
     varying = cast(dict[str, object], shaping["time_varying"])
     for group, entries, allowed in (
         ("time_invariant", fixed, {"zv", "zvd", "ei"}),
-        ("time_varying", varying, {"zv", "zvd", "ei"}),
+        ("time_varying", varying, {"zv", "zvd", "ei", "experimental"}),
     ):
         if unknown := entries.keys() - allowed:
             raise ValueError(
                 f"Unknown input_shaping.{group} entries: {sorted(unknown)}"
             )
+
+    experimental = varying.get("experimental", False)
+    if not isinstance(experimental, bool):
+        raise TypeError("input_shaping.time_varying.experimental must be a YAML boolean.")
 
     def enabled(entry: object, name: str) -> bool:
         value = cast(dict[str, object], entry)["enabled"]
@@ -171,6 +187,7 @@ def _load_input_shaping(shaping: dict[str, object]) -> InputShapingConfig:
             ),
         ),
         time_varying=TimeVaryingShapingConfig(
+            experimental=experimental,
             zv=tvist_settings("zv"),
             zvd=tvist_settings("zvd"),
             ei=TvistEIConfig(
@@ -201,20 +218,36 @@ def load_robot_config(
 
 def parse_robot_config(config: dict[str, object]) -> RobotConfig:
     """Validate an in-memory configuration with the robot YAML schema."""
+    config = config.copy()
+    for name in ("velocity_limits", "acceleration_limits"):
+        trajectory_name = f"trajectory_{name}"
+        if trajectory_name in config:
+            config[name] = config[trajectory_name]
     arrays: dict[str, FloatVector] = {}
+    defaults = {"passive_damping": [0.4] * 7, "added_armature": [0.0] * 7}
     for name in (
-        "motor_kp", "motor_kd", "velocity_limits", "acceleration_limits", "passive_damping"
+        "motor_kp", "motor_kd", "velocity_limits", "acceleration_limits",
+        "passive_damping", "added_armature",
     ):
-        raw = config.get(name, [0.4] * 7) if name == "passive_damping" else config[name]
+        raw = config.get(name, defaults[name]) if name in defaults else config[name]
         values = np.asarray(cast(ArrayLike, raw), dtype=np.float64)
         if values.shape != (7,) or not np.isfinite(values).all():
             raise ValueError(f"{name} must contain seven finite values.")
-        if name in ("motor_kp", "motor_kd", "passive_damping"):
+        if name in ("motor_kp", "motor_kd", "passive_damping", "added_armature"):
             if np.any(values < 0):
                 raise ValueError(f"{name} must be nonnegative.")
         elif np.any(values <= 0):
             raise ValueError(f"{name} must be strictly positive.")
         arrays[name] = values
+    for name in ("velocity_limits", "acceleration_limits"):
+        absolute_name = f"absolute_{name}"
+        if absolute_name in config:
+            values = np.asarray(cast(ArrayLike, config[absolute_name]), dtype=np.float64)
+            if values.shape != (7,) or not np.isfinite(values).all():
+                raise ValueError(f"{absolute_name} must contain seven finite values.")
+            if np.any(values < arrays[name]):
+                raise ValueError(f"{absolute_name} must be at least the trajectory limits.")
+            arrays[absolute_name] = values
 
     waypoints = np.asarray(cast(ArrayLike, config["waypoints"]), dtype=np.float64)
     if (
@@ -253,8 +286,11 @@ def parse_robot_config(config: dict[str, object]) -> RobotConfig:
         motor_kp=arrays["motor_kp"],
         motor_kd=arrays["motor_kd"],
         passive_damping=arrays["passive_damping"],
+        added_armature=arrays["added_armature"],
         velocity_limits=arrays["velocity_limits"],
         acceleration_limits=arrays["acceleration_limits"],
+        absolute_velocity_limits=arrays.get("absolute_velocity_limits"),
+        absolute_acceleration_limits=arrays.get("absolute_acceleration_limits"),
         waypoints=waypoints,
         simulation=SimulationConfig(
             dt_s=simulation["dt_s"],
@@ -278,15 +314,29 @@ def parse_robot_config(config: dict[str, object]) -> RobotConfig:
 
 def robot_config_to_dict(config: RobotConfig) -> dict[str, object]:
     """Return a detached, plain YAML-compatible snapshot with the same schema."""
+    shaping = asdict(config.input_shaping)
+    if not config.input_shaping.time_varying.experimental:
+        # Preserve the canonical snapshot and fingerprint for legacy runs.
+        del shaping["time_varying"]["experimental"]
+    limits: dict[str, object] = {}
+    for name, trajectory, absolute in (
+        ("velocity_limits", config.velocity_limits, config.absolute_velocity_limits),
+        ("acceleration_limits", config.acceleration_limits, config.absolute_acceleration_limits),
+    ):
+        # Legacy metadata readers retain the more restrictive planning limit.
+        limits[name] = trajectory.tolist()
+        if absolute is not None:
+            limits[f"trajectory_{name}"] = trajectory.tolist()
+            limits[f"absolute_{name}"] = absolute.tolist()
     return {
         "motor_kp": config.motor_kp.tolist(),
         "motor_kd": config.motor_kd.tolist(),
         "passive_damping": config.passive_damping.tolist(),
-        "velocity_limits": config.velocity_limits.tolist(),
-        "acceleration_limits": config.acceleration_limits.tolist(),
+        **({"added_armature": config.added_armature.tolist()} if np.any(config.added_armature) else {}),
+        **limits,
         "waypoints": config.waypoints.tolist(),
         "simulation": asdict(config.simulation),
-        "input_shaping": asdict(config.input_shaping),
+        "input_shaping": shaping,
         "simulation_assessment": asdict(config.simulation_assessment),
     }
 

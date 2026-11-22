@@ -1,4 +1,4 @@
-# Paths are relative to this file. The robot config supplies gains, limits,
+# Paths are relative to this file. The robot config supplies gains, calibration, limits,
 # simulation and assessment settings, but not waypoints or input shaping.
 robot_config: robot_config.yaml
 trajectory_suite: trajectory_suite_focused.yaml
@@ -21,6 +21,7 @@ input_shaping:
       utilization_min: 0.3
       residual_tolerance: 0.05 # nominal single-mode residual fraction
   time_varying:
+    experimental: false # screen branch subsets, then simulate and rank survivors
     zv:
       enabled: true
       tau_min_s: 0.0 # all stable oscillatory modes

@@ -44,7 +44,7 @@ def main() -> None:
         parser.error("Require at least one trajectory and at least two modal samples.")
 
     config = load_robot_config()
-    model = load_model(config.passive_damping)
+    model = load_model(config.passive_damping, added_armature=config.added_armature)
     model.opt.timestep = config.simulation.dt_s
     position_indices, _ = resolve_joint_indices(model)
     qi = nominal_configuration(model)[position_indices]

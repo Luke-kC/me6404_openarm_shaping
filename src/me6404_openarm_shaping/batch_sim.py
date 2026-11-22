@@ -134,6 +134,7 @@ def main() -> None:
                         config, provenance["model_sha256"], MODEL_REVISION
                     ),
                     tvist_schedules=result.tvist_schedules,
+                    tvist_selection=result.tvist_selection,
                     directory_name=name,
                 )
                 summary = csv.writer(summary_stream)

@@ -117,6 +117,7 @@ class SimulationChecks(TypedDict):
     passing: bool
     scope: str
     reasons: list[SimulationIssue]
+    trajectory_limit_warnings: NotRequired[list[SimulationIssue]]
     informational_contacts: list[ContactEvent]
     settling: SettlingAssessment
     measured_acceleration: AccelerationDiagnostics

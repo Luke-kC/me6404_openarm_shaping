@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from functools import cache
 from pathlib import Path
 
 import mujoco
@@ -26,10 +27,15 @@ FINGER_JOINT_NAMES = (
 )
 
 
-def load_model(passive_damping: ArrayLike | None = None) -> mujoco.MjModel:
+def load_model(
+    passive_damping: ArrayLike | None = None, *, added_armature: ArrayLike | None = None
+) -> mujoco.MjModel:
     model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
     if passive_damping is not None:
         set_passive_damping(model, passive_damping)
+    if added_armature is not None:
+        _, dofs = resolve_joint_indices(model)
+        _apply_armature(model, dofs, model.dof_armature[dofs] + np.asarray(added_armature))
     return model
 
 
@@ -67,6 +73,27 @@ def set_passive_damping(model: mujoco.MjModel, damping: ArrayLike) -> None:
     """Set linear viscous damping on the left arm only, in J1–J7 order."""
     _, dofs = resolve_joint_indices(model)
     model.dof_damping[dofs] = damping
+
+
+@cache
+def _nominal_left_armature() -> FloatVector:
+    model = load_model()
+    _, dofs = resolve_joint_indices(model)
+    return model.dof_armature[dofs]
+
+
+def set_added_armature(model: mujoco.MjModel, added_armature: ArrayLike) -> None:
+    """Set left-arm armature relative to the pinned MJCF, not the current model."""
+    _, dofs = resolve_joint_indices(model)
+    _apply_armature(model, dofs, _nominal_left_armature() + np.asarray(added_armature))
+
+
+def _apply_armature(
+    model: mujoco.MjModel, dofs: NDArray[np.intp], armature: FloatVector
+) -> None:
+    if not np.array_equal(model.dof_armature[dofs], armature):
+        model.dof_armature[dofs] = armature
+        mujoco.mj_setConst(model, mujoco.MjData(model))
 
 
 def nominal_configuration(model: mujoco.MjModel) -> FloatVector:

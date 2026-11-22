@@ -1,5 +1,5 @@
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import partial
 from hashlib import sha256
 from pathlib import Path
@@ -33,6 +33,7 @@ from me6404_openarm_shaping.input_shaping import (
     ei_frequency_tolerance,
     suggest_shaper_parameters,
 )
+from me6404_openarm_shaping.mode_tracking import track_modes
 from me6404_openarm_shaping.robot_model import (
     MODEL_PATH,
     MODEL_REVISION,
@@ -40,6 +41,7 @@ from me6404_openarm_shaping.robot_model import (
     check_joint_configuration,
     load_model,
     modal_properties,
+    set_added_armature,
     set_passive_damping,
 )
 from me6404_openarm_shaping.simulation_helpers import (
@@ -58,6 +60,13 @@ from me6404_openarm_shaping.tvist import (
     apply_tvist_to_joint_trajectory,
     select_tvist_modes,
 )
+from me6404_openarm_shaping.tvist_selection import (
+    RMS_WINDOW_S,
+    SELECTION_OBJECTIVES,
+    build_subset_candidates,
+    evaluate_subset_candidates,
+    response_scores,
+)
 
 
 @dataclass
@@ -67,6 +76,7 @@ class SimulationResult:
     shaper_designs: dict[str, ShaperDesign]
     duration_s: float
     tvist_schedules: dict[str, list[ModalProperties]]
+    tvist_selection: dict[str, object] = field(default_factory=dict)
 
 
 def simulate(
@@ -82,6 +92,7 @@ def simulate(
 
     model.opt.timestep = simulation.dt_s
     set_passive_damping(model, config.passive_damping)
+    set_added_armature(model, config.added_armature)
 
     simulation_time: float = simulation.minimum_duration_s
 
@@ -92,14 +103,13 @@ def simulate(
     for waypoint in waypoints:
         check_joint_configuration(model, waypoint)
 
-    v_lim = 0.8 * config.velocity_limits
-    a_lim = 0.8 * config.acceleration_limits
-
     t: FloatVector
     q: FloatMatrix
     dq: FloatMatrix
     ddq: FloatMatrix
-    t, q, dq, ddq = waypoint_trajectory(waypoints, v_lim, a_lim, dt=model.opt.timestep)
+    t, q, dq, ddq = waypoint_trajectory(
+        waypoints, config.velocity_limits, config.acceleration_limits, dt=model.opt.timestep
+    )
     trajectories: dict[str, JointTrajectory] = {
         "baseline": {"t": t, "q": q, "dq": dq, "ddq": ddq}
     }
@@ -127,8 +137,11 @@ def simulate(
         if settings.enabled
     ]
     tvist_schedules: dict[str, list[ModalProperties]] = {}
+    experimental = shaping.time_varying.experimental
     properties: list[ModalProperties] = []
-    if any(settings.enabled for _, settings, _, _ in fixed_shapers) or tvist_shapers:
+    if any(settings.enabled for _, settings, _, _ in fixed_shapers) or (
+        tvist_shapers and not experimental
+    ):
         workspace = ModalWorkspace(model)
         properties = [
             modal_properties(model, configuration, Kp, Kd, workspace=workspace)
@@ -190,7 +203,7 @@ def simulate(
         }
 
     dt = model.opt.timestep
-    for shaper, settings in tvist_shapers:
+    for shaper, settings in (() if experimental else tvist_shapers):
         label = f"tvist_{shaper.value.lower()}"
         schedule = select_tvist_modes(properties, settings.tau_min_s)
         apply = (
@@ -223,19 +236,86 @@ def simulate(
     )
 
     recordings: dict[str, TrialRecording] = {}
+    ranked_recordings: dict[str, TrialRecording] = {}
+    selection: dict[str, object] = {}
+    if experimental and tvist_shapers:
+        tracked = track_modes(model, q, Kp, Kd)
+        by_shaper = {
+            shaper: build_subset_candidates(q, config, tracked, shaper, settings)
+            for shaper, settings in tvist_shapers
+        }
+        # Compare all survivors on a common horizon, including a full RMS window.
+        max_end = max(
+            (
+                float(candidate.trajectory["t"][-1])
+                for candidates in by_shaper.values()
+                for candidate in candidates
+                if candidate.trajectory is not None
+            ),
+            default=0.0,
+        )
+        max_end = max(max_end, max(float(command["t"][-1]) for command in trajectories.values()))
+        simulation_time = max(
+            simulation_time, max_end + max(RMS_WINDOW_S + dt, simulation.settling_time_s)
+        )
+        fixed_scores: list[tuple[float | None, float | None]] = []
+        for label in ("time_invariant_zvd", "time_invariant_ei"):
+            if label in trajectories:
+                command = trajectories[label]
+                recording = run_trial(
+                    model, command, qi, Kp, Kd, simulation_time, config=config, headless=True
+                )
+                ranked_recordings[label] = recording
+                fixed_scores.append(response_scores(recording, float(command["t"][-1])))
+        fixed_rms = fixed_settling = None
+        if len(fixed_scores) == 2:
+            (r_zvd, t_zvd), (r_ei, t_ei) = fixed_scores
+            if r_zvd is not None and r_ei is not None:
+                fixed_rms = min(r_zvd, r_ei)
+            if t_zvd is not None and t_ei is not None:
+                fixed_settling = min(t_zvd, t_ei)
+        for shaper, candidates in by_shaper.items():
+            prefix = f"tvist_{shaper.value.lower()}"
+            winners, rows = evaluate_subset_candidates(
+                model, config, candidates, simulation_time, fixed_rms, fixed_settling
+            )
+            selected: dict[str, list[int] | None] = {}
+            for objective in SELECTION_OBJECTIVES:
+                label = f"{prefix}_{objective}"
+                if objective not in winners:
+                    print(f"{label}: no eligible winner")
+                    selected[objective] = None
+                    continue
+                candidate, recording = winners[objective]
+                command = candidate.trajectory
+                assert command is not None
+                selected[objective] = list(candidate.branches)
+                print(f"{label}: selected branches {candidate.branches}")
+                trajectories[label] = command
+                tvist_schedules[label] = candidate.schedule + [candidate.schedule[-1]] * (
+                    len(command["t"]) - len(candidate.schedule)
+                )
+                ranked_recordings[label] = recording
+            selection[prefix] = {
+                "candidates": rows, "selected_branches": selected,
+                "fixed_rms_rad": fixed_rms, "fixed_settling_s": fixed_settling,
+            }
 
     for label, trajectory in trajectories.items():
         print(f"\nRunning {label} trial\n")
-        result = run_trial(
-            model,
-            trajectory,
-            qi,
-            Kp,
-            Kd,
-            simulation_time,
-            config=config,
-            headless=headless,
-        )
+        if headless and label in ranked_recordings:
+            result = ranked_recordings[label]
+        else:
+            result = run_trial(
+                model,
+                trajectory,
+                qi,
+                Kp,
+                Kd,
+                simulation_time,
+                config=config,
+                headless=headless,
+            )
         recordings[label] = result
         print_simulation_checks(label, result["simulation_checks"])
         if not result["completed"]:
@@ -254,6 +334,7 @@ def simulate(
             for label, schedule in tvist_schedules.items()
             if label in recordings
         },
+        selection,
     )
 
 
@@ -299,6 +380,7 @@ def main() -> None:
             provenance=provenance,
             configuration_fingerprint=configuration_sha256,
             tvist_schedules=result.tvist_schedules,
+            tvist_selection=result.tvist_selection,
         )
         print("\nSaved simulation results and metadata:")
         print(run_dir)

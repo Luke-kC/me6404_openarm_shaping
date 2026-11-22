@@ -9,13 +9,17 @@
 
 motor_kp: [70, 70, 70, 60, 10, 10, 10]
 motor_kd: [0.55, 0.5, 0.4, 0.4, 0.14, 0.12, 0.10]
-passive_damping: [0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4] # N*m*s/rad, left J1--J7
+# Offline MuJoCo calibration, left J1--J7.
+passive_damping: [0.35, 0.25, 0.6, 0.4, 0.4, 0.4, 0.4] # N*m*s/rad
+added_armature: [0.11, 0.09, 0.2, 0.075, 0.0, 0.0, 0.0] # kg*m^2 above MJCF nominal
 
-# Symmetric joint velocity limits [rad/s]
-velocity_limits: [5, 5, 5, 5, 5, 5, 5]
+# Symmetric reference-generation limits. Shaped commands above these warn.
+trajectory_velocity_limits: [4, 4, 4, 4, 4, 4, 4] # rad/s
+trajectory_acceleration_limits: [8, 8, 8, 8, 8, 8, 8] # rad/s^2
 
-# Symmetric joint acceleration limits [rad/s^2]
-acceleration_limits: [10, 10, 10, 10, 10, 10, 10]
+# Hard command limits for offline screening and simulation reference checks.
+absolute_velocity_limits: [5, 5, 5, 5, 5, 5, 5] # rad/s
+absolute_acceleration_limits: [10, 10, 10, 10, 10, 10, 10] # rad/s^2
 
 # Complete path, including the starting configuration. J1--J7 in radians.
 # Can add more waypoints.
@@ -71,6 +75,7 @@ input_shaping:
       utilization_min: 0.3
       residual_tolerance: 0.05 # nominal single-mode residual fraction
   time_varying:
+    experimental: false # screen branch subsets, then simulate and rank survivors
     zv:
       enabled: true
       tau_min_s: 0.0 # 0 selects every stable oscillatory mode, keep at 0

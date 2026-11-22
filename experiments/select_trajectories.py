@@ -50,7 +50,6 @@ from me6404_openarm_shaping.trajectories import waypoint_trajectory
 
 SEED = 6404
 MARGIN_RAD = 0.20
-LIMIT_SCALE = 0.8  # Match robot_sim's unshaped reference.
 MIN_MAC = 0.80
 MIN_ASSIGNMENT_GAP = 0.02
 BANDS = ("narrow", "medium", "wide")
@@ -330,8 +329,8 @@ def evaluate(
 ) -> Candidate | str:
     t, q, _, _ = waypoint_trajectory(
         waypoints,
-        LIMIT_SCALE * config.velocity_limits,
-        LIMIT_SCALE * config.acceleration_limits,
+        config.velocity_limits,
+        config.acceleration_limits,
         dt=config.simulation.dt_s,
     )
     clearance = joint_clearance(q, waypoints, limits)
@@ -496,7 +495,7 @@ def main() -> None:
     zvd = batch["input_shaping"]["time_invariant"]["zvd"]
     tau_min = float(zvd["tau_min_s"])
     utilization_min = float(zvd["utilization_min"])
-    model = load_model(config.passive_damping)
+    model = load_model(config.passive_damping, added_armature=config.added_armature)
     model.opt.timestep = config.simulation.dt_s
     limits = np.array([model.joint(name).range for name in LEFT_ARM_JOINT_NAMES])
     rng = np.random.default_rng(SEED)
@@ -596,10 +595,8 @@ def main() -> None:
         "full_resolution_modal_rechecks": modal_rechecks,
         "motor_kp": config.motor_kp.tolist(),
         "motor_kd": config.motor_kd.tolist(),
-        "velocity_limits_rad_s": (LIMIT_SCALE * config.velocity_limits).tolist(),
-        "acceleration_limits_rad_s2": (
-            LIMIT_SCALE * config.acceleration_limits
-        ).tolist(),
+        "velocity_limits_rad_s": config.velocity_limits.tolist(),
+        "acceleration_limits_rad_s2": config.acceleration_limits.tolist(),
         "inset_rad": MARGIN_RAD,
         "initial_inset_exception": "Until each initially out-of-inset joint first enters.",
         "contact_policy": (

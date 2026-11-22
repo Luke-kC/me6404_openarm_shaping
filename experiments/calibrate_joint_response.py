@@ -42,7 +42,8 @@ class Replay:
     motion_end_s: float
 
 
-def read_replay(run: Path, joint: int) -> Replay:
+def read_replay(run: Path, joint: int | None = None) -> Replay:
+    """Load recorded motor inputs; with no joint, use all joints to find motion end."""
     # Optional ROS dependencies are needed only by this offline experiment.
     try:
         import rosbag2_py as bag
@@ -116,9 +117,12 @@ def read_replay(run: Path, joint: int) -> Replay:
         for x in (commands, effort, dq, ddq, measured, measured_dq)
     ):
         raise ValueError("Replay requires increasing timestamps and finite J1–J7 data.")
-    moving = np.flatnonzero(np.abs(dq[:, joint]) > 1e-5)
-    if not len(moving) or moving[-1] + 1 >= len(time):
-        raise ValueError("The selected joint has no complete recorded move.")
+    moving_joints = np.abs(dq) > 1e-5
+    moving = np.flatnonzero(
+        np.any(moving_joints, axis=1) if joint is None else moving_joints[:, joint]
+    )
+    if moving.size == 0 or moving[-1] + 1 >= len(time):
+        raise ValueError("The selected recording has no complete move for this replay.")
     motion_end_s = float(time[moving[-1] + 1])
     kp, kd = (constant_gains(gains[topic], topic) for topic in (KP, KD))
     return Replay(

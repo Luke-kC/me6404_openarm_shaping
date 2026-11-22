@@ -338,6 +338,7 @@ def save_experiment(
     provenance: RunProvenance,
     configuration_fingerprint: str,
     tvist_schedules: dict[str, list[ModalProperties]] | None = None,
+    tvist_selection: dict[str, object] | None = None,
     directory_name: str | None = None,
 ) -> Path:
     """Save paired result/metadata files in an atomically unique run directory.
@@ -360,6 +361,7 @@ def save_experiment(
     metadata_path = run_dir / f"{run_id}_metadata.yaml"
     lockfile_path = run_dir / f"{run_id}_uv.lock"
     config_snapshot = robot_config_to_dict(config)
+    config_snapshot["added_armature"] = config.added_armature.tolist()
     metadata = {
         "run_id": run_id,
         "saved_at_utc": saved_at.isoformat(),
@@ -397,6 +399,8 @@ def save_experiment(
             "torque": "N*m",
             "time": "s",
             "natural_frequency": "Hz",
+            "passive_damping": "N*m*s/rad",
+            "added_armature": "kg*m^2 above MJCF nominal",
         },
         "software": {
             "python": platform.python_version(),
@@ -404,6 +408,8 @@ def save_experiment(
             "mujoco": mujoco.__version__,
         },
     }
+    if tvist_selection:
+        metadata["tvist_selection"] = tvist_selection
     if tvist_schedules:
         modes_path = run_dir / "tvist_modes.csv"
         metadata["tvist_modes_file"] = modes_path.name
@@ -482,6 +488,18 @@ _TRIAL_COLORS = {
     "tvist_zvd": "tab:green",
     "time_invariant_ei": "tab:brown",
     "tvist_ei": "tab:pink",
+    "tvist_zv_min_residual": "tab:purple",
+    "tvist_zv_min_settling": "mediumpurple",
+    "tvist_zvd_min_residual": "tab:green",
+    "tvist_zvd_min_settling": "darkolivegreen",
+    "tvist_ei_min_residual": "tab:pink",
+    "tvist_ei_min_settling": "mediumvioletred",
+    "tvist_zv_beat_fixed_rms": "indigo",
+    "tvist_zv_beat_fixed_settling": "plum",
+    "tvist_zvd_beat_fixed_rms": "seagreen",
+    "tvist_zvd_beat_fixed_settling": "limegreen",
+    "tvist_ei_beat_fixed_rms": "deeppink",
+    "tvist_ei_beat_fixed_settling": "rosybrown",
 }
 
 

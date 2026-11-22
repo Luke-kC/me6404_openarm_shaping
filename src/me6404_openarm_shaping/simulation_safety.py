@@ -266,7 +266,7 @@ def assess_trial(
     positions = np.vstack((result["q"], result["final_q"]))
     velocities = np.vstack((result["dq_measured"], result["final_dq"]))
     measured_velocity_limits = (
-        config.velocity_limits
+        config.velocity_ceiling
         + config.simulation_assessment.measured_velocity_tolerance_rad_s
     )
     accelerations = np.vstack((result["ddq_measured"], result["final_ddq"]))
@@ -287,7 +287,7 @@ def assess_trial(
     acceleration_issues = _limit_reasons(
         accelerations,
         position_times,
-        np.column_stack((-config.acceleration_limits, config.acceleration_limits)),
+        np.column_stack((-config.acceleration_ceiling, config.acceleration_ceiling)),
         "acceleration_limit",
         "rad/s^2",
     )
@@ -307,7 +307,7 @@ def assess_trial(
         )
     acceleration_diagnostics: AccelerationDiagnostics = {
         "peak_abs_rad_s2": peaks,
-        "reference_limits_rad_s2": config.acceleration_limits.tolist(),
+        "reference_limits_rad_s2": config.acceleration_ceiling.tolist(),
         "exceedances": [
             issue
             for issue in acceleration_issues
@@ -346,7 +346,7 @@ def assess_trial(
         _limit_reasons(
             trajectory["dq"],
             trajectory["t"],
-            np.column_stack((-config.velocity_limits, config.velocity_limits)),
+            np.column_stack((-config.velocity_ceiling, config.velocity_ceiling)),
             "velocity_limit",
             "rad/s",
         )
@@ -355,7 +355,7 @@ def assess_trial(
         _limit_reasons(
             trajectory["ddq"],
             trajectory["t"],
-            np.column_stack((-config.acceleration_limits, config.acceleration_limits)),
+            np.column_stack((-config.acceleration_ceiling, config.acceleration_ceiling)),
             "acceleration_limit",
             "rad/s^2",
         )
@@ -363,6 +363,21 @@ def assess_trial(
     for issue in reference_reasons:
         if "joint" in issue:
             issue["source"] = "reference"
+    trajectory_warnings: list[SimulationIssue] = []
+    for channel, planning, ceiling, kind, units in (
+        ("dq", config.velocity_limits, config.velocity_ceiling, "velocity_limit", "rad/s"),
+        ("ddq", config.acceleration_limits, config.acceleration_ceiling, "acceleration_limit", "rad/s^2"),
+    ):
+        if np.array_equal(planning, ceiling):
+            continue
+        issues = _limit_reasons(
+            trajectory[channel], trajectory["t"], np.column_stack((-planning, planning)),
+            kind, units,
+        )
+        for issue in issues:
+            if issue["kind"] == kind and "joint" in issue:
+                issue["source"] = "reference"
+                trajectory_warnings.append(issue)
     reasons.extend(reference_reasons)
     categories: CheckCategories = {
         "reference_limits": not reference_reasons,
@@ -395,7 +410,9 @@ def assess_trial(
     return {
         "passing": not reasons,
         "scope": (
-            "Full reference motion limits; sampled measured position/velocity "
+            "Full reference position and absolute velocity/acceleration limits; "
+            "trajectory velocity/acceleration exceedances are warnings. "
+            "Sampled measured position/velocity "
             f"(measured velocity margin +/-"
             f"{config.simulation_assessment.measured_velocity_tolerance_rad_s:g} rad/s "
             "beyond configured limits), torque clipping, settling, and penetrating contacts. "
@@ -405,6 +422,7 @@ def assess_trial(
             "named closed left finger pair are informational only."
         ),
         "reasons": reasons,
+        "trajectory_limit_warnings": trajectory_warnings,
         "informational_contacts": informational_contacts,
         "settling": settling,
         "measured_acceleration": acceleration_diagnostics,
@@ -426,7 +444,7 @@ def print_simulation_checks(label: str, report: SimulationChecks) -> None:
         print(f"  J{joint} peak: {value}")
     print()
     titles = {
-        "reference_limits": "Reference limits",
+        "reference_limits": "Absolute reference limits",
         "position_limits": "Position limits",
         "measured_velocity_limits": "Measured velocity limits",
         "torque_clipping": "Torque clipping",
@@ -440,6 +458,9 @@ def print_simulation_checks(label: str, report: SimulationChecks) -> None:
     if report["measured_acceleration"]["exceedances"]:
         print("\nMeasured acceleration reference-limit exceedances (informational):")
         _print_issues(report["measured_acceleration"]["exceedances"])
+    if warnings := report.get("trajectory_limit_warnings"):
+        print("\nWARNING: Command exceeds trajectory limits (not a failure by itself):")
+        _print_issues(warnings)
     _print_issues(report["reasons"])
     for contact in report["informational_contacts"]:
         print()

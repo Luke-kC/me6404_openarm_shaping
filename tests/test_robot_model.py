@@ -17,8 +17,30 @@ from me6404_openarm_shaping.robot_model import (
     modal_properties,
     nominal_configuration,
     resolve_joint_indices,
+    set_added_armature,
     state_matrix,
 )
+
+
+def test_calibrated_armature_is_additive_and_idempotent() -> None:
+    config = load_robot_config()
+    nominal = load_model()
+    model = load_model(config.passive_damping, added_armature=config.added_armature)
+    _, dofs = resolve_joint_indices(model)
+    expected = nominal.dof_armature.copy()
+    expected[dofs] += config.added_armature
+    np.testing.assert_array_equal(model.dof_damping[dofs], config.passive_damping)
+    for _ in range(2):
+        set_added_armature(model, config.added_armature)
+        np.testing.assert_array_equal(model.dof_armature, expected)
+    q = config.waypoints[0]
+    np.testing.assert_allclose(
+        mass_matrix(model, q) - mass_matrix(nominal, q),
+        np.diag(config.added_armature),
+        atol=1e-12,
+    )
+    set_added_armature(model, np.zeros(7))
+    np.testing.assert_array_equal(model.dof_armature, nominal.dof_armature)
 
 
 def test_reused_modal_workspace_matches_fresh_state_matrices() -> None:

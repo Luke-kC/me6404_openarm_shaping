@@ -139,6 +139,8 @@ def test_unshaped_waypoint_trial(
     monkeypatch.setattr(robot_sim, "load_model", lambda: MagicMock())
     damping = MagicMock()
     monkeypatch.setattr(robot_sim, "set_passive_damping", damping)
+    armature = MagicMock()
+    monkeypatch.setattr(robot_sim, "set_added_armature", armature)
     config = RobotConfig(
         motor_kp=np.ones(7),
         motor_kd=np.ones(7),
@@ -181,13 +183,15 @@ def test_unshaped_waypoint_trial(
     monkeypatch.setattr("matplotlib.pyplot.show", show)
 
     robot_sim.main()
+    armature.assert_called_once()
+    np.testing.assert_array_equal(armature.call_args.args[1], config.added_armature)
     assert damping.call_args.args[1] is config.passive_damping
 
     np.testing.assert_array_equal(
-        generator.call_args.args[1], 0.8 * config.velocity_limits
+        generator.call_args.args[1], config.velocity_limits
     )
     np.testing.assert_array_equal(
-        generator.call_args.args[2], 0.8 * config.acceleration_limits
+        generator.call_args.args[2], config.acceleration_limits
     )
     np.testing.assert_array_equal(generator.call_args.args[0], config.waypoints)
     assert generator.call_args.kwargs["dt"] == 0.004
@@ -231,6 +235,7 @@ def test_whole_trajectory_shaper_design(
     model.opt.timestep = 0.01
     monkeypatch.setattr(robot_sim, "load_model", lambda: model)
     monkeypatch.setattr(robot_sim, "set_passive_damping", MagicMock())
+    monkeypatch.setattr(robot_sim, "set_added_armature", MagicMock())
     monkeypatch.setattr(robot_sim, "ModalWorkspace", MagicMock())
     config = RobotConfig(
         motor_kp=np.ones(7),
@@ -863,8 +868,16 @@ def test_save_experiment_unique_files_and_metadata(
         assert metadata["saved_at_utc"] == "2026-11-15T12:00:00+00:00"
         assert metadata["config"]["waypoints"] == config.waypoints.tolist()
         assert metadata["config"]["motor_kd"] == config.motor_kd.tolist()
+        assert metadata["config"]["passive_damping"] == config.passive_damping.tolist()
+        assert metadata["config"]["added_armature"] == config.added_armature.tolist()
+        assert metadata["config"]["trajectory_velocity_limits"] == [4.0] * 7
+        assert metadata["config"]["trajectory_acceleration_limits"] == [8.0] * 7
+        assert metadata["config"]["absolute_velocity_limits"] == [5.0] * 7
+        assert metadata["config"]["absolute_acceleration_limits"] == [10.0] * 7
         assert metadata["config"]["simulation"] == asdict(config.simulation)
-        assert metadata["config"]["input_shaping"] == asdict(config.input_shaping)
+        shaping = asdict(config.input_shaping)
+        del shaping["time_varying"]["experimental"]
+        assert metadata["config"]["input_shaping"] == shaping
         assert metadata["config"]["simulation_assessment"] == asdict(
             config.simulation_assessment
         )

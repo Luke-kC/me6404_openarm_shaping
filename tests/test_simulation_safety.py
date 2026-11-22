@@ -149,9 +149,9 @@ def test_reference_limits_are_hard_checks(
     elif quantity == "q":
         reference["q"][0, 0] = 100.0  # Beyond the pinned arm's joint range.
     elif quantity == "dq":
-        reference["dq"][0, 0] = config.velocity_limits[0] + 0.01
+        reference["dq"][0, 0] = config.velocity_ceiling[0] + 0.01
     else:
-        reference["ddq"][0, 0] = -config.acceleration_limits[0] - 0.1
+        reference["ddq"][0, 0] = -config.acceleration_ceiling[0] - 0.1
     report = assess_recording(
         model,
         _result(),
@@ -168,6 +168,36 @@ def test_reference_limits_are_hard_checks(
     assert reason.get("source") == "reference"
     assert reason["joint"] == "openarm_left_joint1"
     assert report["categories"]["data_validity"] is not nonfinite
+
+
+@pytest.mark.parametrize(("velocity", "acceleration", "passing"), [
+    (4.5, -9.0, True), (5.0, -10.0, True), (5.01, -9.0, False), (4.5, -10.01, False),
+])
+def test_trajectory_limits_warn_but_absolute_limits_fail(
+    model: mujoco.MjModel,
+    capsys: pytest.CaptureFixture[str],
+    velocity: float,
+    acceleration: float,
+    passing: bool,
+) -> None:
+    config = _config()
+    config.velocity_limits = np.full(7, 4.0)
+    config.acceleration_limits = np.full(7, 8.0)
+    config.absolute_velocity_limits = np.full(7, 5.0)
+    config.absolute_acceleration_limits = np.full(7, 10.0)
+    reference = _reference()
+    reference["dq"][0, 0] = velocity
+    reference["ddq"][0, 0] = acceleration
+    report = assess_recording(
+        model, _result(), config, command_end_time_s=0.0, trajectory=reference
+    )
+    assert report["passing"] is passing
+    assert report["categories"]["reference_limits"] is passing
+    assert {issue["kind"] for issue in report["trajectory_limit_warnings"]} == {
+        "velocity_limit", "acceleration_limit",
+    }
+    print_simulation_checks("test", report)
+    assert "WARNING: Command exceeds trajectory limits" in capsys.readouterr().out
 
 
 def test_complete_reference_is_checked_for_interrupted_run(
@@ -219,7 +249,7 @@ def test_measured_acceleration_is_diagnostic_in_console_and_metadata(
     assert "J2 peak: 48.84 rad/s²" in output
     assert "J7 peak: 4.00 rad/s²" in output
     for category in (
-        "Reference limits",
+        "Absolute reference limits",
         "Position limits",
         "Measured velocity limits",
         "Torque clipping",
@@ -251,11 +281,11 @@ def test_measured_motion_limits_include_final_state(
     result = _result()
     limit: float
     if quantity == "velocity":
-        limit = cast(float, config.velocity_limits[1])
+        limit = cast(float, config.velocity_ceiling[1])
         result["dq_measured"][:, 1] = [limit, limit + 1, -limit - 2]
         result["final_dq"][1] = limit + 3
     else:
-        limit = cast(float, config.acceleration_limits[1])
+        limit = cast(float, config.acceleration_ceiling[1])
         result["ddq_measured"][:, 1] = [limit, limit + 1, -limit - 2]
         result["final_ddq"][1] = limit + 3
     report = assess_recording(
@@ -299,7 +329,7 @@ def test_measured_velocity_tolerance_boundary(
     config = _config()
     config.simulation_assessment.measured_velocity_tolerance_rad_s = margin
     result = _result()
-    speed = direction * (config.velocity_limits[0] + margin + excess)
+    speed = direction * (config.velocity_ceiling[0] + margin + excess)
     if final:
         result["final_dq"][0] = speed
     else:
@@ -314,8 +344,8 @@ def test_measured_velocity_tolerance_boundary(
     if issues:
         reason = issues[0]
         assert "lower_limit" in reason
-        assert reason["lower_limit"] == -config.velocity_limits[0] - margin
-        assert reason["upper_limit"] == config.velocity_limits[0] + margin
+        assert reason["lower_limit"] == -config.velocity_ceiling[0] - margin
+        assert reason["upper_limit"] == config.velocity_ceiling[0] + margin
         assert reason["first_time_s"] == (result["final_time_s"] if final else 0.0)
 
 

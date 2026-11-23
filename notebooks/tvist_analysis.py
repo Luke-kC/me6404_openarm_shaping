@@ -42,7 +42,7 @@ def tvist_formulation(Path, mo):
     h(t)=\frac{\pi}{\omega_d(t)}.
     $$
 
-    Here $h(t)$ is the damped half-period. If time-invariant:
+    Here $h(t)$ is the damped half-period.
 
     $$
     \begin{aligned}

@@ -734,6 +734,7 @@ def hardware_tradeoff_summary(
     vibration_equilibrium_settling_notes = []
     vibration_duration_notes = []
     command_durations_s = {}
+    hardware_baseline_runs = {}
     if hardware_runs:
         _absolute = settling_tolerance_mode.value == "Absolute"
         _tolerance = (
@@ -756,6 +757,10 @@ def hardware_tradeoff_summary(
             vibration_equilibrium_settling_notes,
             vibration_duration_notes,
         ) = summarize_vibration_tradeoffs(_datasets)
+        hardware_baseline_runs = {
+            trajectory: groups["baseline"][0]
+            for trajectory, groups in _datasets.items()
+        }
         # Duration is available even when a repeat lacks a complete residual window.
         command_durations_s = {
             trajectory: {
@@ -766,6 +771,7 @@ def hardware_tradeoff_summary(
         }
     return (
         command_durations_s,
+        hardware_baseline_runs,
         vibration_duration_notes,
         vibration_duration_points,
         vibration_equilibrium_settling_notes,
@@ -837,6 +843,125 @@ def hardware_comparison_plot_helper(Figure, np, plt):
         return fig
 
     return (plot_hardware_comparison,)
+
+
+@app.cell(hide_code=True)
+def hardware_frequency_variation_model_control(mo):
+    hardware_beta_model_selector = mo.ui.dropdown(
+        options=["Nominal", "Calibrated"],
+        value="Calibrated",
+        label="MuJoCo model for β table",
+    )
+    mo.vstack(
+        [
+            mo.md("### Trajectory frequency variation (β)"),
+            hardware_beta_model_selector,
+            mo.md(
+                "**Nominal:** 0.40 N·m·s/rad passive damping per joint, no added armature. "
+                "**Calibrated:** passive damping and added armature from `robot_config.yaml`."
+            ),
+        ]
+    )
+    return (hardware_beta_model_selector,)
+
+
+@app.cell(hide_code=True)
+def hardware_frequency_variation_table(
+    Path,
+    hardware_baseline_runs,
+    hardware_beta_model_selector,
+    mo,
+    np,
+):
+    import yaml
+
+    from me6404_openarm_shaping.configuration import load_robot_config
+    from me6404_openarm_shaping.mode_tracking import track_modes
+    from me6404_openarm_shaping.robot_model import load_model
+
+    hardware_frequency_variation_rows = []
+    if hardware_baseline_runs:
+        _suite_path = (
+            Path(__file__).resolve().parents[1]
+            / "config"
+            / "trajectory_suite_focused.yaml"
+        )
+        _suite = yaml.safe_load(_suite_path.read_text(encoding="utf-8"))
+        _screening = {_entry["id"]: _entry for _entry in _suite["trajectories"]}
+        _config = load_robot_config()
+        if hardware_beta_model_selector.value == "Calibrated":
+            _model = load_model(
+                _config.passive_damping, added_armature=_config.added_armature
+            )
+        else:
+            _model = load_model(np.full(7, 0.4))
+        for _trajectory, _run in hardware_baseline_runs.items():
+            _q = _run.command_q[_run.command_time_s <= _run.tf_s]
+            _tracked = track_modes(
+                _model, _q, _config.motor_kp, _config.motor_kd
+            )
+            _frequencies = _tracked.natural_frequency_hz[:, :2]
+            _mode_1 = _mode_2 = _beta = None
+            if not _tracked.stable.all():
+                _status = "Unstable or marginal model poles"
+            elif (
+                _frequencies.shape[1] < 2 or not np.isfinite(_frequencies).all()
+            ):
+                _status = (
+                    "Two oscillatory modes could not be tracked throughout"
+                )
+            else:
+                _spans = 100 * np.ptp(_frequencies, axis=0) / _frequencies[0]
+                _mode_1, _mode_2 = (round(float(_span), 2) for _span in _spans)
+                _beta = max(_mode_1, _mode_2)
+                _status = (
+                    "Provisional mode match"
+                    if (_tracked.mac[:, :2] < 0.80).any()
+                    or (_tracked.assignment_gap < 0.02).any()
+                    else "Tracked"
+                )
+            _original = _screening.get(_trajectory)
+            hardware_frequency_variation_rows.append(
+                {
+                    "Trajectory": _trajectory,
+                    "Mode 1 β [%]": _mode_1,
+                    "Mode 2 β [%]": _mode_2,
+                    "Recorded-command β [%]": _beta,
+                    "Original screening β [%]": (
+                        None
+                        if _original is None
+                        else round(100 * _original["beta"], 2)
+                    ),
+                    "Screening band": None
+                    if _original is None
+                    else _original["band"],
+                    "Tracking": _status,
+                }
+            )
+        mo.output.replace(
+            mo.vstack(
+                [
+                    mo.md(r"""
+                    The selected MuJoCo model tracks the two lowest initial
+                    oscillatory modes along the first recorded baseline command
+                    for each trajectory, through motion end. For each mode,
+                    $\beta = (f_{\max} - f_{\min}) / f_{\mathrm{initial}}$;
+                    the trajectory β is the larger of the two. These are model
+                    estimates, not measured hardware frequencies.
+
+                    Original screening β and bands are copied from the focused
+                    trajectory suite and refer to the original screening paths
+                    and model. The two J2 tests were not in that suite.
+                    """),
+                    mo.ui.table(
+                        hardware_frequency_variation_rows,
+                        selection=None,
+                        pagination=False,
+                    ),
+                ]
+            )
+        )
+    return
 
 
 @app.cell

@@ -97,9 +97,24 @@ def load_trajectory(
         raise ValueError(
             "Selected trial must be complete and have passing simulation checks."
         )
-    config = metadata["config"]
-    velocity_limits = [float(value) for value in config["velocity_limits"]]
-    acceleration_limits = [float(value) for value in config["acceleration_limits"]]
+    config = cast(dict[str, object], metadata["config"])
+    # Match the MuJoCo command ceilings; legacy exports have only one limit tier.
+    velocity_key = (
+        "absolute_velocity_limits"
+        if "absolute_velocity_limits" in config
+        else "velocity_limits"
+    )
+    acceleration_key = (
+        "absolute_acceleration_limits"
+        if "absolute_acceleration_limits" in config
+        else "acceleration_limits"
+    )
+    velocity_limits = [
+        float(value) for value in cast(Sequence[float | str], config[velocity_key])
+    ]
+    acceleration_limits = [
+        float(value) for value in cast(Sequence[float | str], config[acceleration_key])
+    ]
     if (
         len(velocity_limits) != 7
         or len(acceleration_limits) != 7

@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.25.2"
+__generated_with = "0.26.0"
 app = marimo.App(width="medium")
 
 
@@ -167,7 +167,6 @@ def tvist_formulation(Path, mo):
     """),
         ]
     )
-    return
 
 
 @app.cell
@@ -328,7 +327,6 @@ def oscillator_verification(
             ),
         ]
     )
-    return
 
 
 @app.cell(hide_code=True)
@@ -349,7 +347,6 @@ def overview(mo):
       joint's absolute commanded acceleration exceeds its saved limit (10 rad/s²
       here).
     """)
-    return
 
 
 @app.cell
@@ -517,7 +514,6 @@ def comparison_table(comparison, mo):
     mo.ui.table(
         _display_rows, selection=None, pagination=False, show_download=False
     )
-    return
 
 
 @app.cell(hide_code=True)
@@ -576,7 +572,6 @@ def comparison_plot(comparison, method_labels, mo, plt):
             _fig,
         ]
     )
-    return
 
 
 @app.cell
@@ -834,7 +829,6 @@ def wide07_acceleration_and_schedule(
             _fig,
         ]
     )
-    return
 
 
 @app.cell(hide_code=True)
@@ -927,6 +921,7 @@ def wide07_ablation_original(
     )
     return (
         SimulationOutput,
+        parse_archived_tvist_config,
         parse_robot_config,
         redirect_sim_stdout,
         robot_sim,
@@ -1087,7 +1082,6 @@ def wide07_ablation_plot(
             mo.ui.table(_metrics, selection=None, pagination=False),
         ]
     )
-    return
 
 
 @app.cell
@@ -1306,7 +1300,6 @@ def wide07_ablation_response_plots(
             ),
         ]
     )
-    return
 
 
 @app.cell
@@ -1582,7 +1575,6 @@ def wide07_screening_plots(
             mo.ui.table(_freeze, selection=None, pagination=False),
         ]
     )
-    return
 
 
 @app.cell
@@ -1888,7 +1880,6 @@ def cross_trajectory_screening_comparison(cross_screening_summary, mo, plt):
             ),
         ]
     )
-    return
 
 
 @app.cell(hide_code=True)
@@ -2154,7 +2145,6 @@ def branch_sweep_table(branch_sweep_path, branch_sweep_results, mo):
             mo.ui.table(_rows, selection=None, page_size=18),
         ]
     )
-    return
 
 
 @app.cell(hide_code=True)
@@ -2247,7 +2237,6 @@ def wide07_branch_sweep_tradeoff(branch_sweep_results, mo, plt):
         """),
         ]
     )
-    return
 
 
 @app.cell(hide_code=True)
@@ -2546,7 +2535,6 @@ def experimental_tvist_response_plot(
     _fig.supxlabel("Time from command start [s]")
     _fig.supylabel("Simulated joint position [rad]")
     mo.vstack([mo.md("Dotted lines mark command end."), _fig])
-    return
 
 
 @app.cell(hide_code=True)
@@ -2573,7 +2561,6 @@ def experimental_tvist_final_table(experimental_response_metrics, mo):
             ),
         ]
     )
-    return
 
 
 @app.cell
@@ -2951,7 +2938,6 @@ def experimental_tvist_tradeoff_plot(
     _fig.supxlabel("Total stabilization time [s]")
     _fig.supylabel("Post-command residual RMS [mrad]")
     _fig
-    return
 
 
 @app.cell(hide_code=True)
@@ -2970,7 +2956,6 @@ def experimental_tvist_tradeoff_winners(
             ),
         }
     )
-    return
 
 
 @app.cell(hide_code=True)
@@ -2995,7 +2980,254 @@ def tvist_findings_and_conclusion(mo):
     If very low residual vibration matters most, compare fixed ZVD and TVIST ZVD. If task completion
     time matters more and some vibration is acceptable, reduced-mode TVIST ZV or ZVD may be useful. If fixed EI already meets both requirements, TVIST’s added complexity may not be justified.
     """)
-    return
+
+
+@app.cell(hide_code=True)
+def gain_robustness_controls(mo):
+    gain_robustness_model = mo.ui.dropdown(
+        options=["Nominal", "Calibrated"], value="Nominal", label="Design model"
+    )
+    gain_robustness_run = mo.ui.run_button(label="Run robustness sweep")
+    mo.vstack(
+        [
+            mo.md(r"""## Gain robustness
+
+            Design fixed ZVD and EI and select TVIST ZV and ZVD subsets at 100% gains
+            on the selected model. Replay each command unchanged in three sweeps:
+            Kp only, Kd only, and Kp and Kd together. Each swept gain changes by
+            the same percentage on all seven joints; other gains stay at 100%.
+            Omit criteria with no qualifying subset; criteria that select the same
+            command share a curve.
+
+            Residual vibration is the whole-arm RMS over the first 0.8 s after each
+            command ends, about that run’s measured equilibrium. Each sweep has two tabs
+            that use the same shaped runs: one divides by unshaped RMS at **100%
+            gains**, the other by unshaped RMS **at each gain setting**. The dashed
+            line is the **5%** tolerance relative to the reference in that view.
+
+            ### TVIST legend key
+
+            The four criteria are applied independently at 100% gains. In
+            **TVIST ZV: Min RMS / Min settling / Beat fixed time**, all three
+            criteria selected the same ZV command, so it appears as one curve.
+
+            | Legend shorthand | Full selection rule |
+            | :--- | :--- |
+            | **Min RMS** | Pick the subset with the lowest residual RMS. |
+            | **Min settling** | Pick the subset with the shortest total settling time. |
+            | **Beat fixed time** | Among subsets that settle strictly faster than both fixed ZVD and fixed EI, pick the one with the lowest residual RMS. |
+            | **Beat fixed RMS** | Among subsets with strictly lower residual RMS than both fixed ZVD and fixed EI, pick the one with the shortest total settling time. |
+            """),
+            mo.hstack(
+                [
+                    gain_robustness_model,
+                    gain_robustness_run,
+                ],
+                justify="start",
+                wrap=True,
+            ),
+        ]
+    )
+    return gain_robustness_model, gain_robustness_run
+
+
+@app.cell(hide_code=True)
+def gain_robustness_sweep(
+    data_dir,
+    gain_robustness_model,
+    gain_robustness_run,
+    mo,
+    parse_archived_tvist_config,
+    trial_summary,
+    yaml,
+):
+    from concurrent.futures import ProcessPoolExecutor as _ProcessPoolExecutor
+    from multiprocessing import get_context as _get_context
+
+    from me6404_openarm_shaping import gain_robustness as _gain_robustness
+    from me6404_openarm_shaping.configuration import RobotConfig as _RobotConfig
+
+    mo.stop(
+        not gain_robustness_run.value,
+        mo.md("Click **Run robustness sweep** to simulate the selected model."),
+    )
+
+    gain_robustness_model_label = gain_robustness_model.value
+    gain_robustness_offsets = _gain_robustness.GAIN_OFFSETS
+    _configs: dict[str, _RobotConfig] = {}
+    for _run in trial_summary:
+        if _run["trial"] != "baseline":
+            continue
+        _path = _run["trajectory_id"]
+        _metadata_path = data_dir / _run["metadata_yaml"]
+        if gain_robustness_model_label == "Calibrated":
+            _metadata_path = (
+                data_dir.parents[1]
+                / "tvist_calibrated"
+                / "experimental_sweep"
+                / _path
+                / f"{_path}_metadata.yaml"
+            )
+        _raw_config = yaml.safe_load(_metadata_path.read_text())["config"]
+        _raw_config["input_shaping"]["time_varying"]["experimental"] = True
+        _configs[_path] = parse_archived_tvist_config(_raw_config)
+
+    gain_robustness_rms: dict[str, dict[str, dict[str, list[float]]]] = {
+        mode: {} for mode in _gain_robustness.GAIN_MODES
+    }
+    # Spawn fresh workers instead of forking marimo's running kernel.
+    with _ProcessPoolExecutor(
+        max_workers=5, mp_context=_get_context("spawn")
+    ) as _pool:
+        _results = _pool.map(
+            _gain_robustness.sweep_trajectory,
+            _configs.keys(),
+            _configs.values(),
+        )
+        for _path, _by_mode in zip(_configs, _results, strict=True):
+            for _mode, _curves in _by_mode.items():
+                gain_robustness_rms[_mode][_path] = _curves
+            print(f"{_path}: finished all three gain sweeps")
+    return (
+        gain_robustness_model_label,
+        gain_robustness_offsets,
+        gain_robustness_rms,
+    )
+
+
+@app.cell(hide_code=True)
+def gain_robustness_plots(
+    gain_robustness_model_label,
+    gain_robustness_offsets,
+    gain_robustness_rms: dict[str, dict[str, dict[str, list[float]]]],
+    mo,
+    plt,
+):
+    _markers = {
+        "Fixed ZVD": "D",
+        "Fixed EI": "s",
+        "TVIST ZV": "o",
+        "TVIST ZVD": "^",
+    }
+    _zero_index = gain_robustness_offsets.index(0)
+    _reference_tabs = {
+        "100%-gain baseline": "at 100% gains",
+        "Matching-gain baseline": "at matching gains",
+    }
+    _outputs = []
+    for _mode, _trajectories in gain_robustness_rms.items():
+        _tabs = {}
+        for _tab, _reference in _reference_tabs.items():
+            _match_gains = _tab == "Matching-gain baseline"
+            _figures = []
+            for _path, _curves in _trajectories.items():
+                _baseline = _curves["Unshaped"]
+                _denominators = (
+                    _baseline
+                    if _match_gains
+                    else [_baseline[_zero_index]] * len(_baseline)
+                )
+                _fig, _ax = plt.subplots(figsize=(9, 4.5), layout="constrained")
+                for _label, _values in _curves.items():
+                    if _label == "Unshaped":
+                        continue
+                    _percentages = [
+                        100 * rms / reference
+                        for rms, reference in zip(
+                            _values, _denominators, strict=True
+                        )
+                    ]
+                    _family = _label.split(":", 1)[0]
+                    _ax.plot(
+                        gain_robustness_offsets,
+                        _percentages,
+                        marker=_markers[_family],
+                        label=_label,
+                    )
+                _ax.axhline(
+                    5, color="0.35", linestyle="--", label="5% tolerance"
+                )
+                _ax.set_title(f"{_path} — {gain_robustness_model_label} model")
+                _ax.set_xlabel("Gain perturbation")
+                _ax.set_xticks(
+                    gain_robustness_offsets,
+                    [f"{x:g}%" for x in gain_robustness_offsets],
+                )
+                _ax.set_ylabel(
+                    f"Residual vibration [% of unshaped RMS {_reference}]"
+                )
+                _ax.set_ylim(bottom=0)
+                _ax.grid(alpha=0.25)
+                _ax.legend(
+                    loc="center left",
+                    bbox_to_anchor=(1, 0.5),
+                    frameon=False,
+                    fontsize="small",
+                )
+                _figures.append(_fig)
+                plt.close(_fig)
+            _tabs[_tab] = mo.vstack(_figures)
+        _outputs.extend([mo.md(f"### {_mode}"), mo.ui.tabs(_tabs)])
+    mo.vstack(_outputs)
+
+
+@app.cell(hide_code=True)
+def focused_trial_controls(mo):
+    focused_trial_run = mo.ui.run_button(label="Generate P1–P3 trajectories")
+    mo.vstack(
+        [
+            mo.md("""## P1–P3 trajectory generation
+
+            | Priority | Trajectory |
+            | :--- | :--- |
+            | P1 | `medium-09` |
+            | P2 | `wide-07` |
+            | P3 | `wide-02` |
+
+            Generate the baseline, fixed ZVD, fixed EI, and two TVIST picks on the calibrated model.
+            Across ZV and ZVD, the vibration-focused pick minimizes residual RMS. The time-focused
+            pick minimizes RMS among commands that settle strictly faster than both fixed shapers.
+            If the picks share a command, use its CSV label once.
+
+            The ZIP contains paired `*_results.csv` and `*_metadata.yaml` files. The table and
+            `selection.yaml` list exact `--trajectory` labels. The bundle includes only complete
+            trials that pass the MuJoCo checks and the offline CSV loader at gravity scale **1.0**.
+            Blocked candidates appear in the table. Physical trials require separate authorization.
+            """),
+            focused_trial_run,
+        ]
+    )
+    return (focused_trial_run,)
+
+
+@app.cell(hide_code=True)
+def focused_trial_generation(data_dir, focused_trial_run, mo):
+    from me6404_openarm_shaping.focused_trial_export import (
+        build_focused_trial_export as _build_focused_trial_export,
+    )
+
+    mo.stop(
+        not focused_trial_run.value,
+        mo.md(
+            "Click **Generate P1–P3 trajectories** to run the calibrated simulations and check the exports."
+        ),
+    )
+    focused_trial_zip, focused_trial_summary = _build_focused_trial_export(
+        data_dir.parents[2],
+        data_dir.parents[1] / "tvist_calibrated" / "experimental_sweep",
+    )
+    mo.vstack(
+        [
+            mo.ui.table(
+                focused_trial_summary, selection=None, pagination=False
+            ),
+            mo.download(
+                focused_trial_zip,
+                filename="p1-p3-calibrated-trajectories.zip",
+                label="Export trajectories",
+            ),
+        ]
+    )
 
 
 if __name__ == "__main__":

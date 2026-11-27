@@ -14,6 +14,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 from tempfile import mkdtemp
+from typing import cast
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMAND_TOPIC = "/left_joint_trajectory_controller/joint_trajectory"
@@ -56,12 +59,27 @@ def copy_inputs(
     )
     if not csv_path.is_file() or not metadata_path.is_file():
         raise ValueError("CSV and matching *_metadata.yaml must both exist.")
+    metadata_bytes = metadata_path.read_bytes()
+    try:
+        metadata = cast(object, yaml.safe_load(metadata_bytes))
+    except yaml.YAMLError as error:
+        raise ValueError(f"Invalid YAML in {metadata_path.name}.") from error
+    match metadata:
+        case dict() as mapping:
+            fields = cast(dict[str, object], mapping)
+        case _:
+            raise ValueError(f"{metadata_path.name} must contain a YAML mapping.")
+    if "design_model" in fields:
+        model = fields["design_model"]
+        if not isinstance(model, str) or model not in ("calibrated", "nominal"):
+            raise ValueError("design_model must be 'calibrated' or 'nominal'.")
+        output_root = output_root / model
     trial_root = output_root / selection
     trial_root.mkdir(parents=True, exist_ok=True)
     prefix = datetime.now().astimezone().strftime("run_%Y%m%d_%H%M%S_%f_")
     run_dir = Path(mkdtemp(prefix=prefix, dir=trial_root))
     saved_csv = Path(shutil.copy2(csv_path, run_dir))
-    shutil.copy2(metadata_path, run_dir)
+    _ = (run_dir / metadata_path.name).write_bytes(metadata_bytes)
     labels: set[str] = set()
     times: list[float] = []
     with saved_csv.open(newline="") as stream:

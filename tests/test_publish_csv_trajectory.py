@@ -139,6 +139,54 @@ def test_invalid_commands_rejected(
 
 
 @pytest.mark.parametrize(
+    ("limit_key", "ceiling", "column", "at_ceiling", "above_ceiling", "reason"),
+    [
+        (
+            "absolute_velocity_limits",
+            2.0,
+            "J1_dq_reference_rad_s",
+            "2",
+            "2.1",
+            "velocity",
+        ),
+        (
+            "absolute_acceleration_limits",
+            3.0,
+            "J1_ddq_reference_rad_s2",
+            "3",
+            "3.1",
+            "acceleration",
+        ),
+        ("absolute_velocity_limits", 2.0, "J1_q_command_rad", "0.3", "0.31", "segment"),
+    ],
+)
+def test_absolute_limits_override_planning_limits(
+    tmp_path: Path,
+    replay: ModuleType,
+    limit_key: str,
+    ceiling: float,
+    column: str,
+    at_ceiling: str,
+    above_ceiling: str,
+    reason: str,
+) -> None:
+    path, rows = write_trial(tmp_path, replay)
+    metadata_path = tmp_path / "run_metadata.yaml"
+    metadata = yaml.safe_load(metadata_path.read_text())
+    metadata["config"][limit_key] = [ceiling] * 7
+    metadata_path.write_text(yaml.safe_dump(metadata))
+
+    rows[1][column] = at_ceiling
+    write_rows(path, rows)
+    assert len(replay.load_trajectory(path, 1.0, "unshaped").points) == 3
+
+    rows[1][column] = above_ceiling
+    write_rows(path, rows)
+    with pytest.raises(ValueError, match=reason):
+        replay.load_trajectory(path, 1.0, "unshaped")
+
+
+@pytest.mark.parametrize(
     "failure", ["missing", "failed", "incomplete", "samples", "joint_order"]
 )
 def test_requires_matching_passing_metadata(

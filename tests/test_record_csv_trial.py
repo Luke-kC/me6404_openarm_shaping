@@ -72,6 +72,28 @@ def test_copies_and_unique_directories(
     assert copied.name == args.csv.name
 
 
+@pytest.mark.parametrize("design_model", ["calibrated", "nominal"])
+def test_routes_tagged_exports(
+    wrapper: ModuleType, tmp_path: Path, design_model: str
+) -> None:
+    args = inputs(tmp_path)
+    metadata_path = args.csv.with_name("sim_metadata.yaml")
+    metadata = f"results_file: sim_results.csv\ndesign_model: {design_model}\n"
+    metadata_path.write_text(metadata)
+
+    run_dir, _, _ = wrapper.copy_inputs(args.csv, args.output_dir, args.trajectory)
+    assert run_dir.parent == args.output_dir / design_model / args.trajectory
+    assert (run_dir / metadata_path.name).read_text() == metadata
+
+
+def test_rejects_invalid_design_model(wrapper: ModuleType, tmp_path: Path) -> None:
+    args = inputs(tmp_path)
+    args.csv.with_name("sim_metadata.yaml").write_text("design_model: ../escape\n")
+    with pytest.raises(ValueError, match="design_model"):
+        wrapper.copy_inputs(args.csv, args.output_dir, args.trajectory)
+    assert not args.output_dir.exists()
+
+
 @pytest.mark.parametrize(
     ("selection", "reason"),
     [
